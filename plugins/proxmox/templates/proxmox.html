@@ -1,0 +1,123 @@
+{{ define "proxmox.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Proxmox</title>
+  {{ template "head-assets" . }}
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page">
+    <section class="grid">
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Token Permissions</p>
+            <h2>Recommended Proxmox Role</h2>
+          </div>
+        </div>
+        <p>Create the token in Proxmox under <strong>Datacenter -> Permissions -> API Tokens</strong>.</p>
+        <p>For inventory and status, assign <code>PVEAuditor</code> on the target cluster or node path.</p>
+        <p>For start, stop, and restart, the token also needs <code>VM.PowerMgmt</code> on the VM/LXC path. <code>PVEAdmin</code> works, but it is broad. Prefer a custom role when practical.</p>
+        <p class="subtle">Keep privilege separation enabled unless you intentionally want the token to inherit the user's full permissions.</p>
+      </div>
+
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Register Token</p>
+            <h2>Store Proxmox Credentials</h2>
+          </div>
+        </div>
+        <form method="post" action="/proxmox/tokens" class="settings-form">
+          <label>Insylus device
+            <select name="device_id">
+              {{ range .Devices }}
+              <option value="{{ .ID }}">{{ .Name }}{{ if .Hostname }} ({{ .Hostname }}){{ end }}</option>
+              {{ end }}
+            </select>
+          </label>
+          <label>Proxmox node name
+            <input type="text" name="node_name" placeholder="beta-pve">
+          </label>
+          <label>API URL
+            <input type="url" name="api_url" placeholder="https://10.10.10.30:8006">
+            <span class="subtle">Optional when the enrolled device has a reachable hostname or IP.</span>
+          </label>
+          <label>Token ID
+            <input type="text" name="token_id" placeholder="user@pam!insylus">
+          </label>
+          <label>Token secret
+            <input type="password" name="token_secret" autocomplete="new-password">
+          </label>
+          <label>Role note
+            <input type="text" name="role" placeholder="PVEAuditor or custom power role">
+          </label>
+          <label class="toggle-row">
+            <input type="checkbox" name="tls_insecure">
+            <span>
+              <strong>Allow self-signed Proxmox certificate</strong>
+              <span class="subtle">Use only for trusted local Proxmox nodes.</span>
+            </span>
+          </label>
+          <button type="submit">Store token</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Configured Nodes</p>
+          <h2>Proxmox Access</h2>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="device-table">
+          <thead>
+            <tr>
+              <th>Device</th>
+              <th>Node</th>
+              <th>Token</th>
+              <th>Role</th>
+              <th>API</th>
+              <th>Updated</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {{ range .Nodes }}
+            <tr>
+              <td><a class="device-link" href="/devices/{{ .DeviceID }}">{{ .DeviceName }}</a></td>
+              <td>{{ if .NodeName }}{{ .NodeName }}{{ else }}<span class="muted">unset</span>{{ end }}</td>
+              <td>
+                <span class="pill {{ if .HasToken }}pill-ok{{ else }}pill-warn{{ end }}">{{ if .HasToken }}configured{{ else }}missing{{ end }}</span>
+                {{ if .TokenID }}<span class="subtle">{{ .TokenID }}</span>{{ end }}
+              </td>
+              <td>{{ if .Role }}{{ .Role }}{{ else }}<span class="muted">not noted</span>{{ end }}</td>
+              <td>
+                {{ if .APIURL }}{{ .APIURL }}{{ else }}<span class="muted">device host/IP</span>{{ end }}
+                {{ if .TLSInsecure }}<span class="pill pill-warn">TLS insecure</span>{{ end }}
+              </td>
+              <td>{{ formatTime .UpdatedAt }}</td>
+              <td>
+                {{ if .HasToken }}
+                <form method="post" action="/proxmox/tokens/{{ .DeviceID }}/delete" class="inline-form">
+                  <button type="submit" class="button-secondary compact-button">Remove</button>
+                </form>
+                {{ end }}
+              </td>
+            </tr>
+            {{ else }}
+            <tr><td colspan="7">No Proxmox nodes detected or configured yet.</td></tr>
+            {{ end }}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
+{{ end }}

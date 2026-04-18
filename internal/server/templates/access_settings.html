@@ -1,0 +1,61 @@
+{{ define "access_settings.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Settings</title>
+  {{ template "head-assets" . }}
+  <style>
+    .details-grid .label { margin-right: 0.25em; }
+  </style>
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page">
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Managed Account</p>
+          <h2>Remote Access Defaults</h2>
+        </div>
+        <span class="pill">{{ .ManagedAccount.ManagedUser }}</span>
+      </div>
+      <form method="post" action="/access/settings/managed-account" class="settings-form">
+        <label>Managed user
+          <input type="text" name="managed_user" placeholder="remote-account" required>
+        </label>
+        <label>Access level
+          <select name="access_level">
+            <option value="audit" {{ if eq .ManagedAccount.AccessMode "audit" }}selected{{ end }}>audit - Read system logs</option>
+            <option value="docker" {{ if eq .ManagedAccount.AccessMode "docker" }}selected{{ end }}>docker - Manage containers</option>
+            <option value="sudo_prompted" {{ if eq .ManagedAccount.AccessMode "sudo_prompted" }}selected{{ end }}>sudo (prompted) - Full admin access (prompts for password)</option>
+            <option value="sudo_passwordless" {{ if eq .ManagedAccount.AccessMode "sudo_passwordless" }}selected{{ end }}>sudo (passwordless) - Full admin access (no password)</option>
+          </select>
+        </label>
+        <p class="muted">This is the remote Linux account Insylus manages on access-managed devices. It is separate from the controller service account that runs Insylus.</p>
+        <p class="muted">When access is enabled on a device, the agent links this account if it already exists, or creates it if it is missing.</p>
+        <button type="submit">Save managed account</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">How It Works</p>
+          <h2>Managed User Behavior</h2>
+        </div>
+      </div>
+      <div class="details-grid">
+        <p><span class="label">Controller service user:</span> <strong>insylus</strong></p>
+        <p><span class="label">Default remote managed user:</span> <strong>{{ .ManagedAccount.ManagedUser }}</strong></p>
+        <p><span class="label">Default access mode:</span> <strong>{{ .ManagedAccount.AccessMode }}</strong></p>
+        <p><span class="label">Existing account:</span> <strong>linked</strong></p>
+        <p><span class="label">Missing account:</span> <strong>created by agent</strong></p>
+        <p><span class="label">Privilege boundary:</span> <strong>target agent applies changes</strong></p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
+{{ end }}

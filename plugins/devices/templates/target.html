@@ -1,0 +1,45 @@
+{{ define "target.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ .Target.Name }}</title>
+  {{ template "head-assets" . }}
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page">
+    <section class="section-grid">
+      <article class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Connection</p>
+            <h2>{{ .Target.Name }}</h2>
+          </div>
+          <span class="pill">{{ if .Target.Kind }}{{ .Target.Kind }}{{ else }}target{{ end }}</span>
+        </div>
+        <div class="facts">
+          <p><span>API URL</span>{{ if .Target.APIURL }}<code>{{ .Target.APIURL }}</code>{{ else }}<span class="muted">none</span>{{ end }}</p>
+          <p><span>SSH host</span>{{ if .Target.SSHHost }}<code>{{ .Target.SSHHost }}</code>{{ else }}<span class="muted">none</span>{{ end }}</p>
+          <p><span>SSH user</span>{{ if .Target.SSHUser }}<code>{{ .Target.SSHUser }}</code>{{ else }}<span class="muted">none</span>{{ end }}</p>
+          <p><span>IPs</span><span>{{ range .Target.IPs }}<code>{{ . }}</code> {{ else }}none{{ end }}</span></p>
+        </div>
+      </article>
+      <article class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Operator Context</p>
+            <h2>Notes</h2>
+          </div>
+        </div>
+        <form method="post" action="/devices/{{ .Target.ID }}/note" class="settings-form">
+          <textarea name="note" rows="6">{{ .Target.Note }}</textarea>
+          <button type="submit">Save note</button>
+        </form>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
+{{ end }}

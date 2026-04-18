@@ -1,0 +1,34 @@
+OpenClaw skill install for Insylus
+
+Recommended shared local install path:
+
+```bash
+mkdir -p ~/.openclaw/skills
+cp -r /opt/insylus/openclaw-skills/insylus ~/.openclaw/skills/
+```
+
+Alternative workspace-local install path:
+
+```bash
+mkdir -p ./skills
+cp -r /opt/insylus/openclaw-skills/insylus ./skills/
+```
+
+What to copy:
+
+- Copy the whole folder:
+  `/opt/insylus/openclaw-skills/insylus`
+
+Expected result:
+
+- Shared install:
+  `~/.openclaw/skills/insylus/SKILL.md`
+
+- Workspace install:
+  `./skills/insylus/SKILL.md`
+
+Notes:
+
+- Do not copy only `SKILL.md`; copy the entire `insylus` folder so the `references/` files come with it.
+- This skill is CLI-oriented and expects `insylusctl` or `insylus` to exist on the machine where OpenClaw runs.
+- If the skill does not appear immediately, restart OpenClaw or start a new session.

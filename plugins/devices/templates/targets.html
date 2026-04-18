@@ -1,0 +1,55 @@
+{{ define "targets.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Devices</title>
+  {{ template "head-assets" . }}
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page">
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">New Device</p>
+          <h2>Add Device</h2>
+        </div>
+      </div>
+      <form method="post" action="/devices" class="quick-add">
+        <label>Name <input type="text" name="name" placeholder="atlas"></label>
+        <label>Kind <input type="text" name="kind" placeholder="linux-host"></label>
+        <label>Hostname <input type="text" name="hostname" placeholder="atlas.local"></label>
+        <button type="submit">Add device</button>
+      </form>
+    </section>
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Fleet</p>
+          <h2>Devices</h2>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Kind</th><th>Hostname</th><th>IPs</th></tr></thead>
+          <tbody>
+            {{ range .Targets }}
+            <tr>
+              <td><a class="device-link" href="/devices/{{ .ID }}">{{ .Name }}</a></td>
+              <td><span class="pill">{{ if .Kind }}{{ .Kind }}{{ else }}unknown{{ end }}</span></td>
+              <td>{{ if .Hostname }}{{ .Hostname }}{{ else }}<span class="muted">pending</span>{{ end }}</td>
+              <td>{{ range .IPs }}<code>{{ . }}</code> {{ else }}<span class="muted">none</span>{{ end }}</td>
+            </tr>
+            {{ else }}
+            <tr><td colspan="4">No targets yet.</td></tr>
+            {{ end }}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
+{{ end }}

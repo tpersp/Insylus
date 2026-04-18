@@ -1,0 +1,5 @@
+namei -l /opt/insylus
+sudo chown -R aia:appgroup /opt/insylus
+sudo find /opt/insylus -type d -exec chmod 2775 {} \;
+sudo find /opt/insylus -type f -exec chmod 664 {} \;
+sudo find /opt/insylus/bin /opt/insylus/dist /opt/insylus/scripts -type f -exec chmod 775 {} \;

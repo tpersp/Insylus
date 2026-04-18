@@ -1,0 +1,22 @@
+{{ define "head-assets" }}
+  <link rel="icon" type="image/svg+xml" href="/static/insylus-favicon.svg">
+  <link rel="shortcut icon" href="/static/insylus-favicon.svg">
+  <link rel="stylesheet" href="/static/styles.css">
+{{ end }}
+
+{{ define "header" }}
+<header class="topbar">
+  <div class="brand">
+    <img class="brand-mark" src="/static/insylus-icon.svg" alt="" width="44" height="44">
+    <div>
+      <h1>Insylus</h1>
+      <p>Homelab inventory and access control</p>
+    </div>
+  </div>
+  <nav>
+    {{ range pluginNavItems }}
+    <a href="{{ .Href }}">{{ .Label }}</a>
+    {{ end }}
+  </nav>
+</header>
+{{ end }}

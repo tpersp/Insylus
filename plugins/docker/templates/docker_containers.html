@@ -1,0 +1,74 @@
+{{ define "docker_containers.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Docker: {{ .Device.DeviceName }}</title>
+  {{ template "head-assets" . }}
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page">
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Containers</p>
+          <h2>Containers on {{ .Device.DeviceName }}</h2>
+        </div>
+        <label class="toggle-row">
+          <input type="checkbox" id="show-all-toggle">
+          <span>Show stopped</span>
+        </label>
+      </div>
+      <div class="table-wrap">
+        <table class="device-table" id="containers-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Image</th>
+              <th>Status</th>
+              <th>State</th>
+              <th>Ports</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="containers-body">
+            <tr><td colspan="6">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Images</p>
+          <h2>Docker Images</h2>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="device-table">
+          <thead>
+            <tr>
+              <th>Repository</th>
+              <th>Tag</th>
+              <th>ID</th>
+              <th>Size</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody id="images-body">
+            <tr><td colspan="5">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script>
+    window.DOCKER_DEVICE_ID = "{{ .Device.DeviceID }}";
+  </script>
+  <script src="/plugin-assets/docker/docker.js" defer></script>
+</body>
+</html>
+{{ end }}

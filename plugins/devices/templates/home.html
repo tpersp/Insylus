@@ -1,0 +1,98 @@
+{{ define "home.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Devices</title>
+  {{ template "head-assets" . }}
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page">
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">New Device</p>
+          <h2>Add Device</h2>
+        </div>
+      </div>
+      <form method="post" action="/devices" class="quick-add">
+        <label>New device
+          <input type="text" name="name" placeholder="Docker02">
+        </label>
+        <button type="submit">Create</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Fleet</p>
+          <h2>Devices</h2>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="device-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Mode</th>
+              <th>Host</th>
+              <th>Topology</th>
+              <th>Parent</th>
+              <th>Agent</th>
+              <th>WOL</th>
+              <th>Access</th>
+              <th>Last Seen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{ range .Devices }}
+            <tr>
+              <td>
+                <a class="device-link" href="/devices/{{ .Device.ID }}">{{ .Device.Name }}</a>
+                {{ if .Resolved.Purpose }}{{ if ne .Resolved.Purpose "unknown" }}<span class="subtle">{{ .Resolved.Purpose }}</span>{{ end }}{{ end }}
+              </td>
+              <td>
+                <span class="pill {{ if eq .Policy.DeviceMode "access-managed" }}pill-ok{{ else }}pill-muted{{ end }}">{{ if eq .Policy.DeviceMode "access-managed" }}managed{{ else }}inventory{{ end }}</span>
+              </td>
+              <td>
+                <strong>{{ if .Device.Hostname }}{{ .Device.Hostname }}{{ else }}pending install{{ end }}</strong>
+                {{ if .Device.IPs }}<span class="subtle">{{ range $i, $ip := .Device.IPs }}{{ if $i }}, {{ end }}{{ $ip }}{{ end }}</span>{{ end }}
+              </td>
+              <td><span class="pill">{{ if .Resolved.EffectiveDeviceType }}{{ .Resolved.EffectiveDeviceType }}{{ else }}unknown{{ end }}</span></td>
+              <td>{{ if eq .Resolved.ParentState "linked" }}{{ .Resolved.ParentName }}{{ else if eq .Resolved.ParentState "unknown" }}<span class="muted">Unknown</span>{{ else }}<span class="muted">None</span>{{ end }}</td>
+              <td>
+                <span class="pill {{ if .Update.UpdateAvailable }}pill-warn{{ else if eq .Update.Status "failed" }}pill-danger{{ else }}pill-ok{{ end }}">
+                  {{ if .Device.AgentVersion }}{{ .Device.AgentVersion }}{{ else }}unknown{{ end }}{{ if .Update.UpdateAvailable }} update{{ end }}{{ if eq .Update.Status "failed" }} failed{{ end }}
+                </span>
+              </td>
+              <td>
+                {{ if and .Discovery.WakeOnLAN.Enabled (isOnline .Device.LastSeenAt) }}
+                <button type="button" class="button-secondary compact-button" disabled>Already on</button>
+                {{ else if .Discovery.WakeOnLAN.Enabled }}
+                <form method="post" action="/devices/{{ .Device.ID }}/wake" class="inline-form">
+                  <button type="submit" class="button-secondary compact-button">Wake</button>
+                </form>
+                <span class="subtle">{{ .Discovery.WakeOnLAN.Interface }}</span>
+                {{ else }}
+                <button type="button" class="button-secondary compact-button" disabled>Unavailable</button>
+                {{ end }}
+              </td>
+              <td>
+                <span class="pill {{ if .Report.EnforcementSucceeded }}pill-ok{{ else }}pill-warn{{ end }}">{{ .Policy.AccessMode }}</span>
+              </td>
+              <td><span class="{{ staleClass .Device.LastSeenAt }}">{{ formatTime .Device.LastSeenAt }}</span></td>
+            </tr>
+            {{ else }}
+            <tr><td colspan="9">No devices yet.</td></tr>
+            {{ end }}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
+{{ end }}

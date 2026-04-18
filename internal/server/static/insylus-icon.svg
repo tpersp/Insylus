@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Insylus icon</title>
+  <desc id="desc">An eye with a network node as the iris.</desc>
+  <defs>
+    <linearGradient id="eye-fill" x1="10" y1="8" x2="55" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f4eedf"/>
+      <stop offset="0.58" stop-color="#76b8a7"/>
+      <stop offset="1" stop-color="#e4b657"/>
+    </linearGradient>
+    <radialGradient id="iris-fill" cx="0" cy="0" r="1" gradientTransform="translate(32 32) rotate(90) scale(15)">
+      <stop stop-color="#f4eedf"/>
+      <stop offset="0.4" stop-color="#76b8a7"/>
+      <stop offset="1" stop-color="#17302d"/>
+    </radialGradient>
+    <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#020606" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <path fill="url(#eye-fill)" filter="url(#soft-shadow)" d="M1.8 32C8.5 20 19.1 13.6 32 13.6S55.5 20 62.2 32C55.5 44 44.9 50.4 32 50.4S8.5 44 1.8 32Z"/>
+  <path fill="#07100f" d="M7.8 32C13.9 22.9 22 18.4 32 18.4S50.1 22.9 56.2 32C50.1 41.1 42 45.6 32 45.6S13.9 41.1 7.8 32Z"/>
+  <circle cx="32" cy="32" r="15.8" fill="url(#iris-fill)" stroke="#e4b657" stroke-width="2.2"/>
+  <g fill="none" stroke="#f4eedf" stroke-linecap="round" stroke-width="2.35">
+    <path d="M32 32 22.5 27"/>
+    <path d="M32 32 42 26"/>
+    <path d="M32 32 24.2 40.4"/>
+    <path d="M32 32 43.6 39.8"/>
+  </g>
+  <g fill="#07100f" stroke="#f4eedf" stroke-width="2">
+    <circle cx="32" cy="32" r="4.5"/>
+    <circle cx="22.5" cy="27" r="3.2"/>
+    <circle cx="42" cy="26" r="3.2"/>
+    <circle cx="24.2" cy="40.4" r="3.2"/>
+    <circle cx="43.6" cy="39.8" r="3.2"/>
+  </g>
+  <circle cx="30.6" cy="30.5" r="1.25" fill="#f4eedf"/>
+</svg>

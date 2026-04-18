@@ -1,0 +1,187 @@
+{{ define "topology.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Topology</title>
+  {{ template "head-assets" . }}
+  <script src="/plugin-assets/topology/topology.js" defer></script>
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page topology-page">
+    <section class="topology-shell">
+      <aside class="topology-sidebar">
+        <div class="panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Manual Gear</p>
+              <h2>Add Node</h2>
+            </div>
+          </div>
+          <form method="post" action="/topology/nodes" class="stack compact-form">
+            <label>Name
+              <input type="text" name="name" maxlength="80" placeholder="Basement Switch" required>
+            </label>
+            <label>Kind
+              <select name="kind">
+                <option value="router">router</option>
+                <option value="switch">switch</option>
+                <option value="access-point">access-point</option>
+                <option value="patch-panel">patch-panel</option>
+                <option value="internet">internet</option>
+                <option value="other">other</option>
+              </select>
+            </label>
+            <label>Note
+              <textarea name="note" rows="3" placeholder="Optional operator note"></textarea>
+            </label>
+            <button type="submit">Add gear</button>
+          </form>
+        </div>
+
+        <div class="panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Manual Links</p>
+              <h2>Add Link</h2>
+            </div>
+          </div>
+          <form method="post" action="/topology/links" class="stack compact-form">
+            <label>From
+              <select name="from" required>
+                <option value="">select endpoint</option>
+                {{ range .Options }}
+                <option value="{{ .Value }}">{{ .Label }}</option>
+                {{ end }}
+              </select>
+            </label>
+            <label>To
+              <select name="to" required>
+                <option value="">select endpoint</option>
+                {{ range .Options }}
+                <option value="{{ .Value }}">{{ .Label }}</option>
+                {{ end }}
+              </select>
+            </label>
+            <label>Label
+              <input type="text" name="label" maxlength="80" placeholder="uplink, wifi, trunk">
+            </label>
+            <button type="submit">Add link</button>
+          </form>
+        </div>
+
+        <div class="panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Filters</p>
+              <h2>View</h2>
+            </div>
+          </div>
+          <div class="topology-filters">
+            <label><input type="checkbox" data-topology-filter="manual" checked> Manual</label>
+            <label><input type="checkbox" data-topology-filter="inferred" checked> Inferred</label>
+            <label><input type="checkbox" data-topology-filter="discovered" checked> Discovered</label>
+            <label><input type="checkbox" data-topology-filter="unknown" checked> Unknown</label>
+            <label><input type="checkbox" data-topology-filter="none" checked> None</label>
+          </div>
+          <div class="topology-filters topology-kind-filters">
+            <p class="subtle">Kinds</p>
+            <label><input type="checkbox" data-topology-kind-filter="infrastructure" checked> Infrastructure</label>
+            <label><input type="checkbox" data-topology-kind-filter="device" checked> Bare metal</label>
+            <label><input type="checkbox" data-topology-kind-filter="vm" checked> VMs</label>
+            <label><input type="checkbox" data-topology-kind-filter="lxc" checked> LXCs</label>
+            <label><input type="checkbox" data-topology-kind-filter="container" checked> Containers</label>
+            <label><input type="checkbox" data-topology-kind-filter="service"> Services</label>
+          </div>
+        </div>
+      </aside>
+
+      <section class="topology-main panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Graph</p>
+            <h2>Homelab Map</h2>
+          </div>
+          <div class="topology-toolbar">
+            <button type="button" class="button-secondary" data-topology-action="fit">Fit</button>
+            <button type="button" class="button-secondary" data-topology-action="save-layout">Save layout</button>
+            <button type="button" class="button-secondary" data-topology-action="reset-layout">Reset layout</button>
+          </div>
+        </div>
+        <div id="topology-status" class="muted">Loading topology...</div>
+        <div id="topology-graph" class="topology-graph" aria-label="Topology graph"></div>
+        <div id="topology-selection" class="topology-selection muted">Click a node or link for details. Device nodes open their device page on double click.</div>
+      </section>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Manual Gear</p>
+            <h2>Nodes</h2>
+          </div>
+        </div>
+        {{ if .Nodes }}
+        <ul class="topology-list">
+          {{ range .Nodes }}
+          <li>
+            <form method="post" action="/topology/nodes/{{ .ID }}" class="inline-edit-form">
+              <input type="text" name="name" value="{{ .Name }}" maxlength="80" required>
+              <select name="kind">
+                <option value="router" {{ if eq .Kind "router" }}selected{{ end }}>router</option>
+                <option value="switch" {{ if eq .Kind "switch" }}selected{{ end }}>switch</option>
+                <option value="access-point" {{ if eq .Kind "access-point" }}selected{{ end }}>access-point</option>
+                <option value="patch-panel" {{ if eq .Kind "patch-panel" }}selected{{ end }}>patch-panel</option>
+                <option value="internet" {{ if eq .Kind "internet" }}selected{{ end }}>internet</option>
+                <option value="other" {{ if eq .Kind "other" }}selected{{ end }}>other</option>
+              </select>
+              <input type="text" name="note" value="{{ .Note }}" maxlength="160" placeholder="note">
+              <button type="submit" class="button-secondary">Save</button>
+            </form>
+            <form method="post" action="/topology/nodes/{{ .ID }}/delete" class="inline-action-form">
+              <button type="submit" class="button-secondary">Delete</button>
+            </form>
+          </li>
+          {{ end }}
+        </ul>
+        {{ else }}
+        <p class="muted">No manual topology nodes yet.</p>
+        {{ end }}
+      </div>
+
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Manual Links</p>
+            <h2>Connections</h2>
+          </div>
+        </div>
+        {{ if .Links }}
+        <ul class="topology-list">
+          {{ range .Links }}
+          <li>
+            <div>
+              <strong>{{ .FromKind }}:{{ .FromID }} -> {{ .ToKind }}:{{ .ToID }}</strong>
+            </div>
+            <form method="post" action="/topology/links/{{ .ID }}" class="inline-edit-form">
+              <input type="text" name="label" value="{{ .Label }}" maxlength="80" placeholder="manual link">
+              <button type="submit" class="button-secondary">Save</button>
+            </form>
+            <form method="post" action="/topology/links/{{ .ID }}/delete" class="inline-action-form">
+              <button type="submit" class="button-secondary">Delete</button>
+            </form>
+          </li>
+          {{ end }}
+        </ul>
+        {{ else }}
+        <p class="muted">No manual links yet.</p>
+        {{ end }}
+      </div>
+    </section>
+  </main>
+</body>
+</html>
+{{ end }}

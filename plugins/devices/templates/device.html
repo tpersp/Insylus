@@ -1,0 +1,347 @@
+{{ define "device.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ .Record.Device.Name }}</title>
+  {{ template "head-assets" . }}
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page">
+    <div class="page-title">
+      <div>
+        <p class="eyebrow">Device</p>
+        <h2>{{ .Record.Device.Name }}</h2>
+        <div class="title-meta">
+          <span>{{ if .Record.Device.Hostname }}{{ .Record.Device.Hostname }}{{ else }}pending hostname{{ end }}</span>
+          <span>{{ if .Record.Device.OSName }}{{ .Record.Device.OSName }}{{ else }}unknown OS{{ end }}</span>
+          <span class="{{ staleClass .Record.Device.LastSeenAt }}">Seen {{ formatTime .Record.Device.LastSeenAt }}</span>
+        </div>
+      </div>
+      <div class="title-actions">
+        {{ if and .Record.Discovery.WakeOnLAN.Enabled (isOnline .Record.Device.LastSeenAt) }}
+        <button type="button" class="button-secondary" disabled>Already on</button>
+        {{ else if .Record.Discovery.WakeOnLAN.Enabled }}
+        <form method="post" action="/devices/{{ .Record.Device.ID }}/wake" class="inline-form">
+          <button type="submit">Wake device</button>
+        </form>
+        {{ else }}
+        <button type="button" class="button-secondary" disabled>Wake unavailable</button>
+        {{ end }}
+        <a class="button-link" href="/devices/{{ .Record.Device.ID }}/install">Install agent</a>
+      </div>
+    </div>
+
+    <section class="stat-grid">
+      <div class="stat-card">
+        <span class="stat-label">Mode</span>
+        <strong>{{ if eq .Record.Policy.DeviceMode "access-managed" }}Access managed{{ else }}Inventory only{{ end }}</strong>
+        <span class="subtle">{{ if eq .Record.Policy.DeviceMode "access-managed" }}policy enforcement enabled{{ else }}no access changes{{ end }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Type</span>
+        <strong>{{ .Record.Resolved.EffectiveDeviceType }}</strong>
+        <span class="subtle">{{ .Record.Resolved.DeviceTypeSource }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Purpose</span>
+        <strong>{{ if eq .Record.Resolved.Purpose "unknown" }}Unknown{{ else }}{{ .Record.Resolved.Purpose }}{{ end }}</strong>
+        <span class="subtle">{{ .Record.Resolved.PurposeSource }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Parent</span>
+        <strong>{{ if eq .Record.Resolved.ParentState "linked" }}{{ .Record.Resolved.ParentName }}{{ else if eq .Record.Resolved.ParentState "unknown" }}Unknown{{ else }}None{{ end }}</strong>
+        <span class="subtle">{{ .Record.Resolved.ParentSource }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Agent</span>
+        <strong>{{ if .Record.Device.AgentVersion }}{{ .Record.Device.AgentVersion }}{{ else }}unknown{{ end }}</strong>
+        <span class="subtle">{{ if .Record.Update.EffectiveEnabled }}auto-update enabled{{ else }}auto-update disabled{{ end }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Wake On LAN</span>
+        <strong>{{ if and .Record.Discovery.WakeOnLAN.Enabled (isOnline .Record.Device.LastSeenAt) }}Already on{{ else if .Record.Discovery.WakeOnLAN.Enabled }}Available{{ else }}Unavailable{{ end }}</strong>
+        <span class="subtle">{{ if and .Record.Discovery.WakeOnLAN.Enabled (isOnline .Record.Device.LastSeenAt) }}wake is not needed{{ else if .Record.Discovery.WakeOnLAN.Reason }}{{ .Record.Discovery.WakeOnLAN.Reason }}{{ else if .Record.Discovery.WakeOnLAN.Interface }}{{ .Record.Discovery.WakeOnLAN.Interface }}{{ else }}no wakeable interface reported{{ end }}</span>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Device Mode</p>
+            <h2>{{ if eq .Record.Policy.DeviceMode "access-managed" }}Access Managed{{ else }}Inventory Only{{ end }}</h2>
+          </div>
+          <span class="pill {{ if eq .Record.Policy.DeviceMode "access-managed" }}pill-ok{{ else }}pill-muted{{ end }}">{{ .Record.Policy.DeviceMode }}</span>
+        </div>
+        {{ if eq .Record.Policy.DeviceMode "access-managed" }}
+        <p>Insylus may enforce the managed account policy on this device according to the access settings below.</p>
+        {{ else }}
+        <p>Insylus will not modify users, SSH keys, sudoers, or groups on this device. Health, topology, workloads, and auto-update still work.</p>
+        {{ end }}
+        <details class="edit-drawer">
+          <summary>Edit device mode</summary>
+          <form method="post" action="/devices/{{ .Record.Device.ID }}/mode" class="stack compact-form">
+            <label>Mode
+              <select name="device_mode">
+                <option value="inventory-only" {{ if isSelectedDeviceMode .Record.Policy.DeviceMode "inventory-only" }}selected{{ end }}>Inventory only</option>
+                <option value="access-managed" {{ if isSelectedDeviceMode .Record.Policy.DeviceMode "access-managed" }}selected{{ end }}>Access managed</option>
+              </select>
+            </label>
+            <p class="muted">Switching to access-managed starts with managed access disabled. Choose audit or sudo separately after saving.</p>
+            <p class="muted">Be careful on controller-like hosts such as Atlas: inventory-only is recommended there.</p>
+            <button type="submit">Save device mode</button>
+          </form>
+        </details>
+      </div>
+
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Identity</p>
+            <h2>Connection</h2>
+          </div>
+          <span class="pill">{{ .Record.Resolved.PlatformClass }}</span>
+        </div>
+        <div class="facts">
+          <p><span>ID</span><code>{{ .Record.Device.ID }}</code></p>
+          <p><span>Hostname</span><strong>{{ if .Record.Device.Hostname }}{{ .Record.Device.Hostname }}{{ else }}pending{{ end }}</strong></p>
+          <p><span>IPs</span>{{ if .Record.Device.IPs }}{{ range $i, $ip := .Record.Device.IPs }}{{ if $i }}, {{ end }}<code>{{ $ip }}</code>{{ end }}{{ else }}none yet{{ end }}</p>
+          <p><span>Wake On LAN</span>{{ if .Record.Discovery.WakeOnLAN.Enabled }}<strong>Available</strong>{{ else }}Unavailable{{ end }}</p>
+          {{ if .Record.Discovery.WakeOnLAN.MACAddress }}<p><span>WOL MAC</span><code>{{ .Record.Discovery.WakeOnLAN.MACAddress }}</code></p>{{ end }}
+          {{ if .Record.Discovery.WakeOnLAN.Interface }}<p><span>WOL interface</span>{{ .Record.Discovery.WakeOnLAN.Interface }}</p>{{ end }}
+          {{ if .SSHAlias }}
+          <p><span>Managed SSH</span><code>{{ .SSHAlias }}</code></p>
+          <p><span>SSH command</span><code>{{ .SSHCommand }}</code></p>
+          {{ else }}
+          <p><span>Managed SSH</span><strong>Unavailable</strong></p>
+          <p><span>Reason</span><span class="muted">{{ if ne .Record.Policy.DeviceMode "access-managed" }}Inventory-only devices do not expose an Insylus-managed SSH command.{{ else if not .Record.Policy.ManagedAccountEnabled }}Managed access is not enabled.{{ else if eq .Record.Policy.AccessMode "disabled" }}Access mode is disabled.{{ else }}No device IP has been reported yet.{{ end }}</span></p>
+          {{ end }}
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Agent</p>
+            <h2>Update State</h2>
+          </div>
+          <span class="pill {{ if .Record.Update.UpdateAvailable }}pill-warn{{ else if eq .Record.Update.Status "failed" }}pill-danger{{ else }}pill-ok{{ end }}">{{ if .Record.Update.Status }}{{ .Record.Update.Status }}{{ else }}idle{{ end }}</span>
+        </div>
+        <div class="facts">
+          <p><span>Effective</span><strong>{{ if .Record.Update.EffectiveEnabled }}enabled{{ else }}disabled{{ end }}</strong> <span class="muted">({{ .Record.Update.Override }})</span></p>
+          <p><span>Server version</span>{{ if .Record.Update.ServerAgentVersion }}{{ .Record.Update.ServerAgentVersion }}{{ else }}unknown{{ end }}</p>
+          <p><span>Update available</span>{{ if .Record.Update.UpdateAvailable }}yes{{ else }}no{{ end }}</p>
+          <p><span>Platform</span>{{ if .Record.Update.ReportedGOOS }}{{ .Record.Update.ReportedGOOS }}/{{ .Record.Update.ReportedGOARCH }}{{ else }}unknown{{ end }}</p>
+          <p><span>Last checked</span>{{ formatTime .Record.Update.LastCheckedAt }}</p>
+          <p><span>Last error</span>{{ if .Record.Update.Error }}{{ .Record.Update.Error }}{{ else }}none{{ end }}</p>
+        </div>
+        <details class="edit-drawer">
+          <summary>Edit auto-update</summary>
+          <form method="post" action="/devices/{{ .Record.Device.ID }}/agent-auto-update" class="stack compact-form">
+            <label>Override
+              <select name="agent_auto_update_override">
+                <option value="inherit" {{ if eq .Record.Update.Override "inherit" }}selected{{ end }}>inherit global default</option>
+                <option value="enabled" {{ if eq .Record.Update.Override "enabled" }}selected{{ end }}>enabled</option>
+                <option value="disabled" {{ if eq .Record.Update.Override "disabled" }}selected{{ end }}>disabled</option>
+              </select>
+            </label>
+            <button type="submit">Save auto-update setting</button>
+          </form>
+        </details>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Topology</p>
+            <h2>Relationships</h2>
+          </div>
+          <span class="pill">{{ .Record.Resolved.ParentState }}</span>
+        </div>
+        <div class="facts">
+          <p><span>Type</span><strong>{{ .Record.Resolved.EffectiveDeviceType }}</strong> <span class="muted">({{ .Record.Resolved.DeviceTypeSource }})</span></p>
+          <p><span>Purpose</span><strong>{{ if eq .Record.Resolved.Purpose "unknown" }}Unknown{{ else }}{{ .Record.Resolved.Purpose }}{{ end }}</strong> <span class="muted">({{ .Record.Resolved.PurposeSource }})</span></p>
+          <p><span>Parent</span><strong>{{ if eq .Record.Resolved.ParentState "linked" }}{{ .Record.Resolved.ParentName }}{{ else if eq .Record.Resolved.ParentState "unknown" }}Unknown{{ else }}None{{ end }}</strong> <span class="muted">({{ .Record.Resolved.ParentSource }})</span></p>
+          <p><span>Children</span>{{ if .Children }}{{ range $i, $child := .Children }}{{ if $i }}, {{ end }}{{ $child }}{{ end }}{{ else }}none{{ end }}</p>
+          <p><span>Discovery</span>{{ formatTime .Record.Discovery.UpdatedAt }}</p>
+        </div>
+        <details class="edit-drawer">
+          <summary>Edit topology overrides</summary>
+          <form method="post" action="/devices/{{ .Record.Device.ID }}/topology" class="stack compact-form">
+            <input type="hidden" name="action" value="set-type">
+            <label>Type override
+              <select name="device_type">
+                <option value="unknown">auto</option>
+                <option value="bare-metal" {{ if isSelectedDeviceType .Record.Resolved.EffectiveDeviceType "bare-metal" }}selected{{ end }}>bare-metal</option>
+                <option value="vm" {{ if isSelectedDeviceType .Record.Resolved.EffectiveDeviceType "vm" }}selected{{ end }}>vm</option>
+                <option value="lxc" {{ if isSelectedDeviceType .Record.Resolved.EffectiveDeviceType "lxc" }}selected{{ end }}>lxc</option>
+                <option value="container" {{ if isSelectedDeviceType .Record.Resolved.EffectiveDeviceType "container" }}selected{{ end }}>container</option>
+              </select>
+            </label>
+            <button type="submit">Save type override</button>
+          </form>
+          <form method="post" action="/devices/{{ .Record.Device.ID }}/topology" class="stack compact-form">
+            <input type="hidden" name="action" value="set-purpose">
+            <label>Purpose override
+              <input name="purpose" list="purpose-suggestions" maxlength="80" placeholder="OpenClaw host, Discord bot, living picture frame" value="{{ if .Record.Metadata.PurposeOverride }}{{ .Record.Resolved.Purpose }}{{ end }}">
+              <datalist id="purpose-suggestions">
+                <option value="OpenClaw host">
+                <option value="Coding server">
+                <option value="Discord bot">
+                <option value="Living picture frame">
+                <option value="docker-host">
+                <option value="proxmox-node">
+              </datalist>
+            </label>
+            <p class="muted">Leave empty or use Clear purpose to return to auto-detected purpose.</p>
+            <button type="submit">Save purpose override</button>
+          </form>
+          <form method="post" action="/devices/{{ .Record.Device.ID }}/topology" class="stack compact-form">
+            <input type="hidden" name="action" value="set-parent-device">
+            <label>Parent override
+              <select name="parent_device_id">
+                <option value="">select device</option>
+                {{ range .Devices }}
+                <option value="{{ .ID }}">{{ .Name }}</option>
+                {{ end }}
+              </select>
+            </label>
+            <button type="submit">Set parent override</button>
+          </form>
+          <form method="post" action="/devices/{{ .Record.Device.ID }}/topology" class="actions-grid">
+            <button type="submit" class="button-secondary" name="action" value="set-parent-unknown">Parent Unknown</button>
+            <button type="submit" class="button-secondary" name="action" value="set-parent-none">Parent None</button>
+            <button type="submit" class="button-secondary" name="action" value="clear-parent">Clear parent</button>
+            <button type="submit" class="button-secondary" name="action" value="clear-type">Clear type</button>
+            <button type="submit" class="button-secondary" name="action" value="clear-purpose">Clear purpose</button>
+          </form>
+        </details>
+      </div>
+
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Operator Context</p>
+            <h2>Note</h2>
+          </div>
+        </div>
+        {{ if .Record.Metadata.Note }}
+        <p class="note">{{ .Record.Metadata.Note }}</p>
+        {{ else }}
+        <p class="muted">No note yet.</p>
+        {{ end }}
+        <details class="edit-drawer">
+          <summary>Edit note</summary>
+          <form method="post" action="/devices/{{ .Record.Device.ID }}/note" class="stack compact-form">
+            <label>Note
+              <textarea name="note" rows="5" placeholder="All containers should be available in dockge">{{ .Record.Metadata.Note }}</textarea>
+            </label>
+            <button type="submit">Save note</button>
+          </form>
+        </details>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Access</p>
+            <h2>Desired Policy</h2>
+          </div>
+          <span class="pill {{ if .Record.Report.EnforcementSucceeded }}pill-ok{{ else }}pill-warn{{ end }}">{{ if .Record.Report.EnforcementSucceeded }}ok{{ else }}pending/error{{ end }}</span>
+        </div>
+        <div class="facts">
+          <p><span>Device mode</span><strong>{{ if eq .Record.Policy.DeviceMode "access-managed" }}Access managed{{ else }}Inventory only{{ end }}</strong></p>
+          <p><span>Access mode</span><strong>{{ .Record.Policy.AccessMode }}</strong></p>
+          <p><span>Revision</span>{{ .Record.Report.AppliedRevision }} / {{ .Record.Policy.PolicyRevision }}</p>
+          <p><span>Assigned key</span>{{ if .Record.Policy.AssignedKeyName }}{{ .Record.Policy.AssignedKeyName }}{{ else }}none{{ end }}</p>
+          <p><span>Fingerprint</span>{{ if .Record.Policy.Fingerprint }}<code>{{ .Record.Policy.Fingerprint }}</code>{{ else }}none{{ end }}</p>
+          <p><span>Last error</span>{{ if .Record.Report.ErrorMessage }}{{ .Record.Report.ErrorMessage }}{{ else }}none{{ end }}</p>
+        </div>
+        {{ if eq .Record.Policy.DeviceMode "access-managed" }}
+        <details class="edit-drawer">
+          <summary>Edit access policy</summary>
+          <form method="post" action="/devices/{{ .Record.Device.ID }}/policy" class="stack compact-form">
+            <label><input type="checkbox" name="managed_account_enabled" {{ if .Record.Policy.ManagedAccountEnabled }}checked{{ end }}> Link or create managed user <code>{{ .ManagedUser }}</code></label>
+            <label>SSH key
+              <select name="ssh_key_id">
+                <option value="">none</option>
+                {{ range .Keys }}
+                <option value="{{ .ID }}" {{ if isSelectedKey $.Record.Policy.SSHKeyID .ID }}selected{{ end }}>{{ .Name }} ({{ .Fingerprint }})</option>
+                {{ end }}
+              </select>
+            </label>
+            <button type="submit">Save policy</button>
+          </form>
+        </details>
+        {{ else }}
+        <p class="muted">Access policy editing is unavailable while this device is inventory-only.</p>
+        {{ end }}
+      </div>
+
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Health</p>
+            <h2>Last Report</h2>
+          </div>
+        </div>
+        <div class="facts">
+          <p><span>Load</span>{{ if .Record.Report.LastPolicyHealth.LoadAverage }}{{ .Record.Report.LastPolicyHealth.LoadAverage }}{{ else }}unknown{{ end }}</p>
+          <p><span>Memory</span>{{ if .Record.Report.LastPolicyHealth.MemoryUsed }}{{ .Record.Report.LastPolicyHealth.MemoryUsed }}{{ else }}unknown{{ end }}</p>
+          <p><span>Disk</span>{{ if .Record.Report.LastPolicyHealth.DiskUsed }}{{ .Record.Report.LastPolicyHealth.DiskUsed }}{{ else }}unknown{{ end }}</p>
+          <p><span>Uptime</span>{{ if .Record.Report.LastPolicyHealth.Uptime }}{{ .Record.Report.LastPolicyHealth.Uptime }}{{ else }}unknown{{ end }}</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Inventory</p>
+            <h2>Runs On This Device</h2>
+          </div>
+        </div>
+        {{ if .Record.Discovery.Workloads }}
+        <ul class="workload-list">
+          {{ range .Record.Discovery.Workloads }}
+          <li>
+            <strong>{{ .Name }}</strong>
+            <span>{{ .Kind }}{{ if .State }} - {{ .State }}{{ end }}</span>
+            {{ if .Image }}<code>{{ .Image }}</code>{{ end }}
+          </li>
+          {{ end }}
+        </ul>
+        {{ else }}
+        <p>No workloads discovered yet.</p>
+        {{ end }}
+      </div>
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Discovery</p>
+            <h2>Warnings</h2>
+          </div>
+        </div>
+        {{ if .Record.Discovery.Warnings }}
+        <ul>
+          {{ range .Record.Discovery.Warnings }}
+          <li>{{ . }}</li>
+          {{ end }}
+        </ul>
+        {{ else }}
+        <p>None.</p>
+        {{ end }}
+      </div>
+    </section>
+  </main>
+</body>
+</html>
+{{ end }}

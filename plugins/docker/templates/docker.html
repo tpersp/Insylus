@@ -1,0 +1,104 @@
+{{ define "docker.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Docker</title>
+  {{ template "head-assets" . }}
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page">
+    <section class="grid">
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">SSH Configuration</p>
+            <h2>Docker Host Settings</h2>
+          </div>
+        </div>
+        <p>Add a Docker host by SSH hostname or IP. You can optionally link it to an existing Insylus target.</p>
+        <form method="post" action="/docker/config" class="settings-form">
+          <label>Existing target
+            <select name="device_id">
+              <option value="">Create a Docker host target</option>
+              {{ range .Devices }}
+              <option value="{{ .ID }}">{{ .Name }}{{ if .Hostname }} ({{ .Hostname }}){{ end }}</option>
+              {{ end }}
+            </select>
+            <span class="subtle">Leave this unset for a standalone Docker host.</span>
+          </label>
+          <label>Name
+            <input type="text" name="device_name" placeholder="docker01">
+            <span class="subtle">Used as the display name when creating a new target.</span>
+          </label>
+          <label>Docker SSH Host
+            <input type="text" name="docker_host" placeholder="docker01.local or 10.0.0.20">
+            <span class="subtle">Hostname, IP, or SSH alias used to run Docker commands.</span>
+          </label>
+          <label>SSH User
+            <input type="text" name="ssh_user" placeholder="Leave empty to use SSH config">
+            <span class="subtle">Override the SSH user for this Docker host. Empty uses the controller's SSH config or default SSH user.</span>
+          </label>
+          <button type="submit">Save Host</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Configured Hosts</p>
+            <h2>Docker Host Config</h2>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="device-table">
+            <thead>
+              <tr>
+                <th>Device</th>
+                <th>Docker Host</th>
+                <th>SSH User</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="docker-config-body">
+              <tr><td colspan="4">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Docker Hosts</p>
+          <h2>Configured Docker Hosts</h2>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="device-table">
+          <thead>
+            <tr>
+              <th>Device</th>
+              <th>Hostname</th>
+              <th>Docker Host</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="docker-nodes-body">
+            <tr><td colspan="5">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script>
+    window.DOCKER_CONFIG_API = "/api/docker/config";
+  </script>
+  <script src="/plugin-assets/docker/docker.js" defer></script>
+</body>
+</html>
+{{ end }}

@@ -1,0 +1,136 @@
+{{ define "dashboard.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard</title>
+  {{ template "head-assets" . }}
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page dashboard-page">
+    <section class="metric-grid">
+      <a class="metric-card" href="/devices">
+        <span class="stat-label">Devices</span>
+        <strong>{{ .Summary.TotalDevices }}</strong>
+        <span class="metric-note">{{ .Summary.OnlineDevices }} online, {{ .Summary.StaleDevices }} stale, {{ .Summary.OfflineDevices }} offline</span>
+      </a>
+      <a class="metric-card" href="/devices">
+        <span class="stat-label">Access Scope</span>
+        <strong>{{ .Summary.AccessManagedDevices }}</strong>
+        <span class="metric-note">access-managed, {{ .Summary.InventoryOnlyDevices }} inventory-only</span>
+      </a>
+      <a class="metric-card {{ if or .Summary.AgentUpdatesAvailable .Summary.AgentUpdateFailures }}metric-warn{{ end }}" href="/devices">
+        <span class="stat-label">Agent Updates</span>
+        <strong>{{ .Summary.AgentUpdatesAvailable }}</strong>
+        <span class="metric-note">{{ .Summary.AgentUpdateFailures }} failed update checks</span>
+      </a>
+      <a class="metric-card {{ if or .Summary.UnhealthyServices .Summary.MissingServices }}metric-danger{{ end }}" href="/services">
+        <span class="stat-label">Services</span>
+        <strong>{{ .ServiceSummary.Total }}</strong>
+        <span class="metric-note">{{ .Summary.UnhealthyServices }} unhealthy, {{ .Summary.MissingServices }} missing</span>
+      </a>
+    </section>
+
+    {{ if not .SupportingState.DevicesEnabled }}
+    <section class="notice-panel">
+      <strong>Devices plugin is disabled.</strong>
+      <span>Enable it from Plugins to restore fleet inventory pages.</span>
+    </section>
+    {{ end }}
+
+    <div class="dashboard-stack">
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Attention</p>
+            <h2>Devices To Check</h2>
+          </div>
+        </div>
+        {{ if .ProblemDevices }}
+        <div class="item-list">
+          {{ range .ProblemDevices }}
+          <a class="list-row" href="/devices/{{ .Identity.ID }}">
+            <span class="status-dot {{ staleClass .Identity.LastSeenAt }}"></span>
+            <span>
+              <strong>{{ .Identity.Name }}</strong>
+              <span class="subtle">{{ if .Identity.Hostname }}{{ .Identity.Hostname }}{{ else }}pending hostname{{ end }} · seen {{ formatTime .Identity.LastSeenAt }}</span>
+            </span>
+            <span class="row-meta">
+              {{ if .Agent.AutoUpdate.UpdateAvailable }}update{{ else if eq .Agent.AutoUpdate.Status "failed" }}update failed{{ else if .Access.ErrorMessage }}policy error{{ else }}check{{ end }}
+            </span>
+          </a>
+          {{ end }}
+        </div>
+        {{ else if .Summary.TotalDevices }}
+        <p class="empty-state">No device needs attention right now.</p>
+        {{ else }}
+        <div class="empty-state">
+          <strong>No devices yet.</strong>
+          <span>Add the first device from the Devices page, then install the agent from its device page.</span>
+        </div>
+        {{ end }}
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Services</p>
+            <h2>Health Signal</h2>
+          </div>
+        </div>
+        {{ if .ServiceSummary.HasRecords }}
+        <div class="health-bars" aria-label="Service health counts">
+          <span class="bar-ok" style="--value: {{ .ServiceSummary.Healthy }}"></span>
+          <span class="bar-danger" style="--value: {{ .ServiceSummary.Unhealthy }}"></span>
+          <span class="bar-warn" style="--value: {{ .ServiceSummary.Missing }}"></span>
+          <span class="bar-muted" style="--value: {{ .ServiceSummary.Unknown }}"></span>
+        </div>
+        <div class="split-facts">
+          <p><span>Healthy</span><strong>{{ .ServiceSummary.Healthy }}</strong></p>
+          <p><span>Unhealthy</span><strong>{{ .ServiceSummary.Unhealthy }}</strong></p>
+          <p><span>Missing</span><strong>{{ .ServiceSummary.Missing }}</strong></p>
+          <p><span>Unknown</span><strong>{{ .ServiceSummary.Unknown }}</strong></p>
+        </div>
+        {{ if .ServiceSummary.HotList }}
+        <div class="item-list compact-list">
+          {{ range .ServiceSummary.HotList }}
+          <a class="list-row" href="/devices/{{ .DeviceID }}">
+            <span class="pill {{ if eq .Health "unhealthy" }}pill-danger{{ else if eq .Health "missing" }}pill-warn{{ else }}pill-muted{{ end }}">{{ .Health }}</span>
+            <span><strong>{{ .Name }}</strong><span class="subtle">{{ .Kind }} on {{ .DeviceName }}</span></span>
+          </a>
+          {{ end }}
+        </div>
+        {{ end }}
+        {{ else }}
+        <p class="empty-state">No services have been reported yet. They will appear after enrolled agents send workload discovery.</p>
+        {{ end }}
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Recent</p>
+            <h2>Service Events</h2>
+          </div>
+        </div>
+        {{ if .RecentEvents }}
+        <div class="timeline">
+          {{ range .RecentEvents }}
+          <a href="/devices/{{ .DeviceID }}">
+            <span class="pill {{ if eq .Action "missing" }}pill-warn{{ else if eq .Action "pruned" }}pill-muted{{ else }}pill-ok{{ end }}">{{ .Action }}</span>
+            <strong>{{ .ServiceName }}</strong>
+            <span>{{ .DeviceName }} · {{ formatTime .CreatedAt }}</span>
+          </a>
+          {{ end }}
+        </div>
+        {{ else }}
+        <p class="empty-state">No service history yet.</p>
+        {{ end }}
+      </section>
+    </div>
+  </main>
+</body>
+</html>
+{{ end }}

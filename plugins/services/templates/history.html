@@ -1,0 +1,52 @@
+{{ define "history.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>History</title>
+  {{ template "head-assets" . }}
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page">
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Events</p>
+          <h2>Recent Changes</h2>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="device-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Action</th>
+              <th>Service</th>
+              <th>Kind</th>
+              <th>Device</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{ range .Events }}
+            <tr>
+              <td>{{ formatTime .CreatedAt }}</td>
+              <td><span class="pill {{ if eq .Action "pruned" }}pill-muted{{ else if eq .Action "missing" }}pill-warn{{ else }}pill-ok{{ end }}">{{ .Action }}</span></td>
+              <td><strong>{{ .ServiceName }}</strong></td>
+              <td>{{ .ServiceKind }}</td>
+              <td><a class="device-link" href="/devices/{{ .Device.ID }}">{{ .Device.Name }}</a></td>
+              <td>{{ if .Details }}{{ .Details }}{{ else }}<span class="muted">none</span>{{ end }}</td>
+            </tr>
+            {{ else }}
+            <tr><td colspan="6">No history yet.</td></tr>
+            {{ end }}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
+{{ end }}

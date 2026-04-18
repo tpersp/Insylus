@@ -1,0 +1,124 @@
+{{ define "jellyfin.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jellyfin</title>
+  {{ template "head-assets" . }}
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page">
+    <section class="grid">
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">API Key</p>
+            <h2>Jellyfin API Key</h2>
+          </div>
+        </div>
+        <p>Create an API key in Jellyfin under <strong>Dashboard > API Keys</strong>. Jellyfin API keys are not permission-scoped — a key grants full access to the server.</p>
+        <p class="subtle">The user ID below is required for the plugin to function. Without it, library queries cannot be personalized or in some cases cannot work at all.</p>
+      </div>
+
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Register Server</p>
+            <h2>Store Jellyfin Credentials</h2>
+          </div>
+        </div>
+        <form method="post" action="/jellyfin/tokens" class="settings-form">
+          <label>Insylus device
+            <select name="device_id">
+              {{ range .Devices }}
+              <option value="{{ .ID }}">{{ .Name }}{{ if .Hostname }} ({{ .Hostname }}){{ end }}</option>
+              {{ end }}
+            </select>
+          </label>
+          <label>Server name
+            <input type="text" name="server_name" placeholder="My Jellyfin Server">
+          </label>
+          <label>API URL
+            <input type="url" name="api_url" placeholder="http://10.10.10.30:8096">
+            <span class="subtle">Optional when the enrolled device has a reachable hostname or IP.</span>
+          </label>
+          <label>API key
+            <input type="password" name="api_key" autocomplete="new-password">
+          </label>
+          <label>Default user ID
+            <input type="text" name="default_user_id" placeholder="">
+            <span class="subtle">User ID for library queries. Find in Jellyfin under Dashboard > Users.</span>
+          </label>
+          <label>Default username (for reference)
+            <input type="text" name="default_username" placeholder="">
+          </label>
+          <label class="toggle-row">
+            <input type="checkbox" name="tls_insecure">
+            <span>
+              <strong>Allow self-signed certificate</strong>
+              <span class="subtle">Use only for trusted local Jellyfin servers.</span>
+            </span>
+          </label>
+          <button type="submit">Store credentials</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Configured Servers</p>
+          <h2>Jellyfin Access</h2>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="device-table">
+          <thead>
+            <tr>
+              <th>Device</th>
+              <th>Server</th>
+              <th>API Key</th>
+              <th>Default User</th>
+              <th>API</th>
+              <th>Updated</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {{ range .Servers }}
+            <tr>
+              <td><a class="device-link" href="/devices/{{ .DeviceID }}">{{ .DeviceName }}</a></td>
+              <td>{{ if .ServerName }}{{ .ServerName }}{{ else }}<span class="muted">unset</span>{{ end }}</td>
+              <td>
+                <span class="pill {{ if .HasToken }}pill-ok{{ else }}pill-warn{{ end }}">{{ if .HasToken }}configured{{ else }}missing{{ end }}</span>
+              </td>
+              <td>
+                {{ if .DefaultUsername }}{{ .DefaultUsername }}{{ else }}<span class="muted">not set</span>{{ end }}
+                {{ if .DefaultUserID }}<br><span class="subtle">{{ .DefaultUserID }}</span>{{ end }}
+              </td>
+              <td>
+                {{ if .APIURL }}{{ .APIURL }}{{ else }}<span class="muted">device host/IP</span>{{ end }}
+                {{ if .TLSInsecure }}<span class="pill pill-warn">TLS insecure</span>{{ end }}
+              </td>
+              <td>{{ formatTime .UpdatedAt }}</td>
+              <td>
+                {{ if .HasToken }}
+                <form method="post" action="/jellyfin/tokens/{{ .DeviceID }}/delete" class="inline-form">
+                  <button type="submit" class="button-secondary compact-button">Remove</button>
+                </form>
+                {{ end }}
+              </td>
+            </tr>
+            {{ else }}
+            <tr><td colspan="6">No Jellyfin servers detected or configured yet.</td></tr>
+            {{ end }}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
+{{ end }}

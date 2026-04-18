@@ -1,0 +1,37 @@
+{{ define "agent_settings.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Settings</title>
+  {{ template "head-assets" . }}
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page">
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Agent Updates</p>
+          <h2>Global Auto-Update Policy</h2>
+        </div>
+        <span class="pill {{ if .AgentAutoUpdateDefault }}pill-ok{{ else }}pill-muted{{ end }}">
+          {{ if .AgentAutoUpdateDefault }}enabled{{ else }}disabled{{ end }}
+        </span>
+      </div>
+      <form method="post" action="/agent/settings/auto-update" class="settings-form">
+        <label class="toggle-row">
+          <input type="checkbox" name="agent_auto_update_default" {{ if .AgentAutoUpdateDefault }}checked{{ end }}>
+          <span>
+            <strong>Enable agent auto-update by default</strong>
+            <span class="subtle">Devices set to inherit will update themselves when the controller serves a newer checksum-verified agent binary.</span>
+          </span>
+        </label>
+        <button type="submit">Save global policy</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>
+{{ end }}

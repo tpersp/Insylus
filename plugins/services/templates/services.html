@@ -1,0 +1,128 @@
+{{ define "services.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Services</title>
+  {{ template "head-assets" . }}
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page">
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Summary</p>
+          <h2>Services</h2>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="device-table">
+          <thead>
+            <tr>
+              <th>Service</th>
+              <th>Count</th>
+              <th>Healthy</th>
+              <th>Unhealthy</th>
+              <th>Missing</th>
+              <th>Kinds</th>
+              <th>Last Seen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{ range .Groups }}
+            <tr>
+              <td><strong>{{ .Name }}</strong></td>
+              <td>{{ .Count }}</td>
+              <td><span class="pill pill-ok">{{ .Healthy }}</span></td>
+              <td><span class="pill {{ if .Unhealthy }}pill-danger{{ else }}pill-muted{{ end }}">{{ .Unhealthy }}</span></td>
+              <td><span class="pill {{ if .Missing }}pill-warn{{ else }}pill-muted{{ end }}">{{ .Missing }}</span></td>
+              <td>{{ range $i, $kind := .Kinds }}{{ if $i }}, {{ end }}{{ $kind }}{{ end }}</td>
+              <td>{{ formatTime .LastSeenAt }}</td>
+            </tr>
+            {{ else }}
+            <tr><td colspan="7">No services discovered yet.</td></tr>
+            {{ end }}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Instances</p>
+          <h2>Where Things Run</h2>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="device-table">
+          <thead>
+            <tr>
+              <th>Service</th>
+              <th>Kind</th>
+              <th>Device</th>
+              <th>Health</th>
+              <th>State</th>
+              <th>Image</th>
+              <th>Last Seen</th>
+              <th>Cleanup</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{ range .Services }}
+            <tr>
+              <td><strong>{{ .Name }}</strong></td>
+              <td>{{ .Kind }}</td>
+              <td><a class="device-link" href="/devices/{{ .Device.ID }}">{{ .Device.Name }}</a></td>
+              <td><span class="pill {{ if eq .Health "healthy" }}pill-ok{{ else if eq .Health "missing" }}pill-warn{{ else if eq .Health "unhealthy" }}pill-danger{{ else }}pill-muted{{ end }}">{{ .Health }}</span></td>
+              <td>{{ if .State }}{{ .State }}{{ else }}<span class="muted">none</span>{{ end }}</td>
+              <td>{{ if .Image }}{{ .Image }}{{ else }}<span class="muted">none</span>{{ end }}</td>
+              <td>{{ formatTime .LastSeenAt }}{{ if .MissingSince }}<span class="subtle">missing since {{ formatOptionalTime .MissingSince }}</span>{{ end }}</td>
+              <td>
+                {{ if eq .Health "missing" }}
+                <form method="post" action="/services/prune-missing">
+                  <input type="hidden" name="device_id" value="{{ .Device.ID }}">
+                  <input type="hidden" name="q" value="{{ .Name }}">
+                  <button type="submit" class="button-secondary">Prune</button>
+                </form>
+                {{ else }}
+                <span class="muted">-</span>
+                {{ end }}
+              </td>
+            </tr>
+            {{ else }}
+            <tr><td colspan="8">No services discovered yet.</td></tr>
+            {{ end }}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Recent</p>
+          <h2>Service History</h2>
+        </div>
+      </div>
+      {{ if .Events }}
+      <ul class="topology-list">
+        {{ range .Events }}
+        <li>
+          <div>
+            <strong>{{ .ServiceName }}</strong>
+            <span class="subtle">{{ .Action }} on {{ .Device.Name }} at {{ formatTime .CreatedAt }}</span>
+          </div>
+        </li>
+        {{ end }}
+      </ul>
+      {{ else }}
+      <p class="muted">No service history yet.</p>
+      {{ end }}
+    </section>
+  </main>
+</body>
+</html>
+{{ end }}
