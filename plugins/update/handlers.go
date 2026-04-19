@@ -3,6 +3,7 @@ package update
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -26,7 +27,7 @@ func newRuntime(host pluginhost.Host) runtime {
 	return runtime{
 		store:   newStore(host),
 		client:  NewGitHubClient(),
-		version: version.AgentVersion,
+		version: version.ServerVersion,
 		render:  host.Web().Render,
 	}
 }
@@ -47,6 +48,15 @@ func (rt runtime) handleUpdatePage(w http.ResponseWriter, r *http.Request) {
 func (rt runtime) handleCheckUpdate(w http.ResponseWriter, r *http.Request) {
 	release, err := rt.client.FetchLatestRelease(r.Context())
 	if err != nil {
+		if errors.Is(err, ErrNoLatestRelease) {
+			writeJSON(w, http.StatusOK, UpdateCheckResponse{
+				CurrentVersion:  rt.version,
+				LatestVersion:   "",
+				UpdateAvailable: false,
+				Message:         "No server updates are available yet.",
+			})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "Failed to check for updates: " + err.Error(),
 		})

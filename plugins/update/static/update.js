@@ -35,14 +35,16 @@
       latestInfo = await resp.json();
 
       if (latestVersionEl) {
-        latestVersionEl.textContent = latestInfo.latest_version || 'Unknown';
+        latestVersionEl.textContent = latestInfo.latest_version || 'Not available';
       }
 
       if (latestInfo.release_notes) {
         releaseNotesEl.innerHTML = '<div class="markdown-body">' + escapeHTML(latestInfo.release_notes).replace(/\n/g, '<br>') + '</div>';
       }
 
-      if (latestInfo.update_available) {
+      if (latestInfo.message) {
+        updateStatusEl.innerHTML = '<div class="alert alert-info">' + escapeHTML(latestInfo.message) + '</div>';
+      } else if (latestInfo.update_available) {
         showUpdateAvailable(latestInfo);
       } else {
         updateStatusEl.innerHTML = '<div class="alert alert-ok">You are running the latest version (' + currentVersion + ').</div>';
