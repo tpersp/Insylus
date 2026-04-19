@@ -715,6 +715,25 @@ func (s *Store) GetDevice(ctx context.Context, id string) (DeviceRecord, error) 
 func (s *Store) GetBootstrapToken(ctx context.Context, deviceID string) (string, error) {
 	var token string
 	err := s.db.QueryRowContext(ctx, `select bootstrap_token from devices where id = ?`, deviceID).Scan(&token)
+	if err == nil {
+		return token, nil
+	}
+	if err != sql.ErrNoRows {
+		return "", err
+	}
+	// No devices row - check if target exists and create one
+	var exists int
+	if err := s.db.QueryRowContext(ctx, `select count(*) from targets where id = ?`, deviceID).Scan(&exists); err != nil {
+		return "", err
+	}
+	if exists == 0 {
+		return "", fmt.Errorf("device not found: %s", deviceID)
+	}
+	// Auto-create devices row with new token
+	token = randomToken(24)
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err = s.db.ExecContext(ctx, `insert into devices (id, name, bootstrap_token, created_at, updated_at) values (?, ?, ?, ?, ?)`,
+		deviceID, "", token, now, now)
 	if err != nil {
 		return "", err
 	}
