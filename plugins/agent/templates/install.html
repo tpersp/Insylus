@@ -10,6 +10,9 @@
 <body>
   {{ template "header" . }}
   <main class="page">
+    <div class="page-nav">
+      <a href="/devices/{{ .Target.ID }}" class="button-secondary">← Back to {{ .Target.Name }}</a>
+    </div>
 <section class="panel">
   <h2>Install Agent on {{ .Target.Name }}</h2>
   <p>Run this on the target Linux host as a sudo-capable user.</p>
