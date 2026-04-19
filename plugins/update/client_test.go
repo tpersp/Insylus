@@ -76,6 +76,32 @@ func TestReleaseAssetURLsUsesReleaseAssets(t *testing.T) {
 	}
 }
 
+func TestServerAssetNameCandidatesPreferPlatformAsset(t *testing.T) {
+	got := serverAssetNameCandidates("linux", "amd64")
+	want := []string{"insylus-server-linux-amd64", "insylus-server"}
+	if len(got) != len(want) {
+		t.Fatalf("serverAssetNameCandidates len = %d, want %d: %#v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("serverAssetNameCandidates[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestServerAssetNameCandidatesPreferArmV7Asset(t *testing.T) {
+	got := serverAssetNameCandidates("linux", "arm")
+	want := []string{"insylus-server-linux-armv7", "insylus-server-linux-arm", "insylus-server"}
+	if len(got) != len(want) {
+		t.Fatalf("serverAssetNameCandidates len = %d, want %d: %#v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("serverAssetNameCandidates[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 func TestReleaseAssetURLsRequiresBinaryAndChecksum(t *testing.T) {
 	_, _, err := ReleaseAssetURLs(&GitHubRelease{
 		TagName: "v1.2.3",

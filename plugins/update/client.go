@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	stdruntime "runtime"
 	"strings"
 	"time"
 )
@@ -94,21 +95,34 @@ func ReleaseAssetURLs(release *GitHubRelease) (string, string, error) {
 	if release == nil {
 		return "", "", ErrMissingReleaseAssets
 	}
-	checksumName := fmt.Sprintf("%s-%s.sha256", InsylusBinaryName, release.TagName)
+	assetNames := serverAssetNameCandidates(stdruntime.GOOS, stdruntime.GOARCH)
 	var binaryURL string
 	var checksumURL string
-	for _, asset := range release.Assets {
-		switch asset.Name {
-		case InsylusBinaryName:
-			binaryURL = strings.TrimSpace(asset.BrowserDownloadURL)
-		case checksumName:
-			checksumURL = strings.TrimSpace(asset.BrowserDownloadURL)
+	for _, assetName := range assetNames {
+		checksumName := fmt.Sprintf("%s-%s.sha256", assetName, release.TagName)
+		binaryURL = ""
+		checksumURL = ""
+		for _, asset := range release.Assets {
+			switch asset.Name {
+			case assetName:
+				binaryURL = strings.TrimSpace(asset.BrowserDownloadURL)
+			case checksumName:
+				checksumURL = strings.TrimSpace(asset.BrowserDownloadURL)
+			}
+		}
+		if binaryURL != "" && checksumURL != "" {
+			return binaryURL, checksumURL, nil
 		}
 	}
-	if binaryURL == "" || checksumURL == "" {
-		return "", "", ErrMissingReleaseAssets
+	return "", "", ErrMissingReleaseAssets
+}
+
+func serverAssetNameCandidates(goos, goarch string) []string {
+	names := []string{fmt.Sprintf("%s-%s-%s", InsylusBinaryName, goos, goarch)}
+	if goos == "linux" && goarch == "arm" {
+		names = append([]string{InsylusBinaryName + "-linux-armv7"}, names...)
 	}
-	return binaryURL, checksumURL, nil
+	return append(names, InsylusBinaryName)
 }
 
 // DownloadFile downloads a file and returns its content.
