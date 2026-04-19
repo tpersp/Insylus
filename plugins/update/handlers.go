@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"insylus/internal/pluginhost"
@@ -71,14 +72,21 @@ func (rt runtime) handleCheckUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updateAvailable := latestVersion != rt.version && latestVersion != skippedVersion
+	downloadURL, checksumURL, assetErr := ReleaseAssetURLs(release)
+	message := ""
+	if updateAvailable && assetErr != nil {
+		updateAvailable = false
+		message = "A server update is available, but the update package is not ready yet."
+	}
 
 	response := UpdateCheckResponse{
 		CurrentVersion:  rt.version,
 		LatestVersion:   latestVersion,
 		UpdateAvailable: updateAvailable,
+		Message:         message,
 		ReleaseNotes:    ParseReleaseNotes(release.Body),
-		DownloadURL:     rt.client.GetDownloadURL(release.TagName),
-		ChecksumURL:     rt.client.GetChecksumURL(release.TagName),
+		DownloadURL:     downloadURL,
+		ChecksumURL:     checksumURL,
 		PublishedAt:     release.PublishedAt,
 		SkippedVersion:  skippedVersion,
 	}
@@ -105,9 +113,26 @@ func (rt runtime) handleApplyUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Version is required", http.StatusBadRequest)
 		return
 	}
+	tagName := versionTag(req.Version)
+	release, err := rt.client.FetchReleaseByTag(r.Context(), tagName)
+	if err != nil {
+		if errors.Is(err, ErrNoLatestRelease) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Update package is not available."})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "Failed to prepare update: " + err.Error(),
+		})
+		return
+	}
+	downloadURL, checksumURL, err := ReleaseAssetURLs(release)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Update package is not available."})
+		return
+	}
 
 	// Create update record
-	id, err := rt.store.CreateUpdate(r.Context(), req.Version, time.Now().UTC().Format(time.RFC3339), "pending", "")
+	id, err := rt.store.CreateUpdate(r.Context(), ExtractVersionFromTag(release.TagName), release.PublishedAt, "pending", "")
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "Failed to create update record: " + err.Error(),
@@ -118,7 +143,7 @@ func (rt runtime) handleApplyUpdate(w http.ResponseWriter, r *http.Request) {
 	// Run update in background since it takes time
 	go func() {
 		ctx := context.Background()
-		rt.performUpdate(ctx, id, req.Version)
+		rt.performUpdate(ctx, id, ExtractVersionFromTag(release.TagName), downloadURL, checksumURL)
 	}()
 
 	writeJSON(w, http.StatusOK, ApplyUpdateResponse{
@@ -128,13 +153,7 @@ func (rt runtime) handleApplyUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 // performUpdate performs the actual update process.
-func (rt runtime) performUpdate(ctx context.Context, updateID int64, version string) {
-	tagName := "v" + version
-
-	// Step 1: Download the binary
-	downloadURL := rt.client.GetDownloadURL(tagName)
-	checksumURL := rt.client.GetChecksumURL(tagName)
-
+func (rt runtime) performUpdate(ctx context.Context, updateID int64, version, downloadURL, checksumURL string) {
 	binaryData, err := rt.client.DownloadFile(ctx, downloadURL)
 	if err != nil {
 		rt.store.UpdateUpdateStatus(ctx, updateID, "failed")
@@ -393,4 +412,11 @@ func copyFile(src, dst string) error {
 	}
 
 	return dstFile.Sync()
+}
+
+func versionTag(version string) string {
+	if strings.HasPrefix(version, "v") {
+		return version
+	}
+	return "v" + version
 }

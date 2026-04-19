@@ -195,11 +195,20 @@ a {
 
 .hero-meta,
 .action-row,
+.button-group,
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.55rem;
   align-items: center;
+}
+
+.button-group {
+  margin-top: 0.85rem;
+}
+
+.update-status .button-group {
+  margin-top: 0.7rem;
 }
 
 .hero-meta {

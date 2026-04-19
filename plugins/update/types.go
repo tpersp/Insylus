@@ -4,11 +4,12 @@ import "time"
 
 // GitHubRelease represents a GitHub release.
 type GitHubRelease struct {
-	TagName     string `json:"tag_name"`
-	Name        string `json:"name"`
-	Body        string `json:"body"`
-	Prerelease  bool   `json:"prerelease"`
-	PublishedAt string `json:"published_at"`
+	TagName     string         `json:"tag_name"`
+	Name        string         `json:"name"`
+	Body        string         `json:"body"`
+	Prerelease  bool           `json:"prerelease"`
+	PublishedAt string         `json:"published_at"`
+	Assets      []ReleaseAsset `json:"assets"`
 }
 
 // ReleaseAsset represents a release asset.
