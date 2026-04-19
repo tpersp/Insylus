@@ -712,6 +712,15 @@ func (s *Store) GetDevice(ctx context.Context, id string) (DeviceRecord, error) 
 	return record, nil
 }
 
+func (s *Store) GetBootstrapToken(ctx context.Context, deviceID string) (string, error) {
+	var token string
+	err := s.db.QueryRowContext(ctx, `select bootstrap_token from devices where id = ?`, deviceID).Scan(&token)
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
 func (s *Store) CreateSSHKey(ctx context.Context, name, publicKey string) (shared.SSHKey, error) {
 	fingerprint, err := fingerprintAuthorizedKey(publicKey)
 	if err != nil {

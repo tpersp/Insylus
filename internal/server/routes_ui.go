@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"insylus/internal/pluginhost"
 	"insylus/internal/shared"
 )
 
@@ -34,7 +35,7 @@ type deviceData struct {
 
 type installData struct {
 	BaseURL string
-	Record  DeviceRecord
+	Target  pluginhost.Target
 	Command string
 }
 
@@ -252,15 +253,21 @@ func (a *App) handleUpdateDeviceTopology(w http.ResponseWriter, r *http.Request)
 }
 
 func (a *App) handleInstallPage(w http.ResponseWriter, r *http.Request) {
-	record, err := a.store.GetDevice(r.Context(), r.PathValue("id"))
+	id := r.PathValue("id")
+	target, err := a.store.targetService().Get(r.Context(), id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	command := "curl -fsSL " + a.baseURL(r) + "/install.sh?token=" + record.Device.BootstrapToken + " | sudo bash"
+	bootstrapToken, err := a.store.GetBootstrapToken(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	command := "curl -fsSL " + a.baseURL(r) + "/install.sh?token=" + bootstrapToken + " | sudo bash"
 	a.render(w, "install.html", installData{
 		BaseURL: a.baseURL(r),
-		Record:  record,
+		Target:  target,
 		Command: command,
 	})
 }

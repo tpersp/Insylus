@@ -11,10 +11,10 @@
   {{ template "header" . }}
   <main class="page">
 <section class="panel">
-  <h2>Install Agent on {{ .Record.Device.Name }}</h2>
+  <h2>Install Agent on {{ .Target.Name }}</h2>
   <p>Run this on the target Linux host as a sudo-capable user.</p>
   <pre><code>{{ .Command }}</code></pre>
-  <p>Bootstrap token: <code>{{ .Record.Device.BootstrapToken }}</code></p>
+  <p>Bootstrap token: <code>{{ .Target.ID }}</code></p>
 </section>
   </main>
 </body>
