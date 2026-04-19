@@ -19,6 +19,9 @@ CTL_BIN_SRC="${INSYLUS_CTL_BIN_SRC:-$REPO_ROOT/dist/insylusctl}"
 SERVER_BIN_DST="$BIN_DIR/insylus-server"
 AGENT_BIN_DST="$BIN_DIR/insylus-agent"
 CTL_BIN_DST="$BIN_DIR/insylusctl"
+UPDATE_HELPER_SRC="$REPO_ROOT/scripts/apply-server-update.sh"
+UPDATE_HELPER_DST="$BIN_DIR/insylus-apply-server-update"
+UPDATE_SUDOERS_PATH="${INSYLUS_UPDATE_SUDOERS_PATH:-/etc/sudoers.d/insylus-server-update}"
 INSYLUS_CTL_LINK_DST="${INSYLUS_CTL_LINK_DST:-$COMMAND_DIR/insylusctl}"
 INSYLUS_LINK_DST="${INSYLUS_LINK_DST:-$COMMAND_DIR/insylus}"
 UNIT_NAME="${INSYLUS_SERVICE_NAME:-insylus.service}"
@@ -56,6 +59,11 @@ if [[ ! -x "$CTL_BIN_SRC" ]]; then
   exit 1
 fi
 
+if [[ ! -x "$UPDATE_HELPER_SRC" ]]; then
+  echo "missing update helper at $UPDATE_HELPER_SRC" >&2
+  exit 1
+fi
+
 if ! getent group "$APP_GROUP" >/dev/null 2>&1; then
   groupadd --system "$APP_GROUP"
 fi
@@ -71,6 +79,7 @@ install -d -o "$APP_USER" -g "$APP_GROUP" -m 0750 "$DATA_DIR"
 install -o "$DEV_OWNER" -g "$DEV_GROUP" -m 0755 "$SERVER_BIN_SRC" "$SERVER_BIN_DST"
 install -o "$DEV_OWNER" -g "$DEV_GROUP" -m 0755 "$AGENT_BIN_SRC" "$AGENT_BIN_DST"
 install -o "$DEV_OWNER" -g "$DEV_GROUP" -m 0755 "$CTL_BIN_SRC" "$CTL_BIN_DST"
+install -o root -g root -m 0755 "$UPDATE_HELPER_SRC" "$UPDATE_HELPER_DST"
 ln -sf "$CTL_BIN_DST" "$INSYLUS_CTL_LINK_DST"
 ln -sf "$CTL_BIN_DST" "$INSYLUS_LINK_DST"
 
@@ -79,6 +88,14 @@ for extra_agent in "$REPO_ROOT"/dist/insylus-agent-linux-*; do
     install -o "$DEV_OWNER" -g "$DEV_GROUP" -m 0755 "$extra_agent" "$BIN_DIR/$(basename "$extra_agent")"
   fi
 done
+
+cat >"$UPDATE_SUDOERS_PATH" <<EOF
+$APP_USER ALL=(root) NOPASSWD: $UPDATE_HELPER_DST *
+EOF
+chmod 0440 "$UPDATE_SUDOERS_PATH"
+if command -v visudo >/dev/null 2>&1; then
+  visudo -cf "$UPDATE_SUDOERS_PATH" >/dev/null
+fi
 
 cat >"$UNIT_PATH" <<EOF
 [Unit]
@@ -91,10 +108,13 @@ Type=simple
 User=$APP_USER
 Group=$APP_GROUP
 WorkingDirectory=$DATA_DIR
+Environment=INSYLUS_UPDATE_BINARY_PATH=$SERVER_BIN_DST
+Environment=INSYLUS_UPDATE_HELPER_PATH=$UPDATE_HELPER_DST
+Environment=INSYLUS_UPDATE_STAGING_DIR=$DATA_DIR/server-updates
 ExecStart=$SERVER_BIN_DST -listen $LISTEN_ADDR -db $DATA_DIR/insylus.db -agent-binary $AGENT_BIN_DST -managed-user $MANAGED_USER -managed-groups $MANAGED_GROUPS
 Restart=always
 RestartSec=5
-NoNewPrivileges=true
+NoNewPrivileges=false
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true

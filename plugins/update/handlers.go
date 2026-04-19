@@ -5,31 +5,35 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"insylus/internal/pluginhost"
 	"insylus/internal/version"
 )
 
 type runtime struct {
-	store   store
-	client  *GitHubClient
-	version string
-	render  func(http.ResponseWriter, string, any)
+	store      store
+	client     *GitHubClient
+	version    string
+	binaryPath string
+	helperPath string
+	stagingDir string
+	render     func(http.ResponseWriter, string, any)
 }
 
 func newRuntime(host pluginhost.Host) runtime {
 	return runtime{
-		store:   newStore(host),
-		client:  NewGitHubClient(),
-		version: version.ServerVersion,
-		render:  host.Web().Render,
+		store:      newStore(host),
+		client:     NewGitHubClient(),
+		version:    version.ServerVersion,
+		binaryPath: envDefault("INSYLUS_UPDATE_BINARY_PATH", DefaultBinaryPath),
+		helperPath: envDefault("INSYLUS_UPDATE_HELPER_PATH", DefaultHelperPath),
+		stagingDir: envDefault("INSYLUS_UPDATE_STAGING_DIR", DefaultStagingDir),
+		render:     host.Web().Render,
 	}
 }
 
@@ -174,52 +178,23 @@ func (rt runtime) performUpdate(ctx context.Context, updateID int64, version, do
 
 	rt.store.UpdateUpdateStatus(ctx, updateID, "downloaded")
 
-	// Step 3: Backup current binary
-	currentBinaryPath := filepath.Join(InsylusDir, InsylusBinaryName)
-	backupBinaryPath := currentBinaryPath + ".backup"
-
-	if _, err := os.Stat(currentBinaryPath); err == nil {
-		if err := copyFile(currentBinaryPath, backupBinaryPath); err != nil {
-			rt.store.UpdateUpdateStatus(ctx, updateID, "failed")
-			return
-		}
-	}
-
-	// Step 4: Stop the service
-	if err := rt.stopService(); err != nil {
-		// Try to restore backup and restart
-		os.Rename(backupBinaryPath, currentBinaryPath)
-		rt.startService()
+	if err := os.MkdirAll(rt.stagingDir, 0750); err != nil {
 		rt.store.UpdateUpdateStatus(ctx, updateID, "failed")
 		return
 	}
 
-	// Step 5: Replace the binary
-	if err := os.WriteFile(currentBinaryPath, binaryData, 0755); err != nil {
-		// Restore backup
-		os.Rename(backupBinaryPath, currentBinaryPath)
-		rt.startService()
+	stagedBinaryPath := filepath.Join(rt.stagingDir, InsylusBinaryName+"-"+version)
+	if err := os.WriteFile(stagedBinaryPath, binaryData, 0755); err != nil {
 		rt.store.UpdateUpdateStatus(ctx, updateID, "failed")
 		return
 	}
 
-	// Step 6: Clean up backup
-	os.Remove(backupBinaryPath)
-
-	// Step 7: Start the service
-	if err := rt.startService(); err != nil {
-		// Try to restore backup
-		binaryDataOld, _ := os.ReadFile(backupBinaryPath)
-		if binaryDataOld != nil {
-			os.WriteFile(currentBinaryPath, binaryDataOld, 0755)
-		}
+	if err := rt.validateStagedBinary(stagedBinaryPath, version); err != nil {
 		rt.store.UpdateUpdateStatus(ctx, updateID, "failed")
 		return
 	}
 
-	// Step 8: Verify health check
-	time.Sleep(2 * time.Second)
-	if !rt.healthCheck() {
+	if err := rt.applyStagedBinary(stagedBinaryPath); err != nil {
 		rt.store.UpdateUpdateStatus(ctx, updateID, "failed")
 		return
 	}
@@ -227,24 +202,25 @@ func (rt runtime) performUpdate(ctx context.Context, updateID int64, version, do
 	rt.store.UpdateUpdateStatus(ctx, updateID, "applied")
 }
 
-// stopService stops the insylus service.
-func (rt runtime) stopService() error {
-	cmd := exec.Command("systemctl", "stop", "insylus.service")
-	return cmd.Run()
+func (rt runtime) validateStagedBinary(path, expectedVersion string) error {
+	cmd := exec.Command(path, "version")
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("validate staged server version: %w", err)
+	}
+	got := strings.TrimSpace(string(output))
+	if got != expectedVersion {
+		return fmt.Errorf("validate staged server version: got %q want %q", got, expectedVersion)
+	}
+	return nil
 }
 
-// startService starts the insylus service.
-func (rt runtime) startService() error {
-	cmd := exec.Command("systemctl", "start", "insylus.service")
-	return cmd.Run()
-}
-
-// healthCheck checks if the service is healthy.
-func (rt runtime) healthCheck() bool {
-	// Simple health check by checking if the binary responds
-	cmd := exec.Command("systemctl", "is-active", "insylus.service")
-	err := cmd.Run()
-	return err == nil
+func (rt runtime) applyStagedBinary(path string) error {
+	cmd := exec.Command("sudo", "-n", rt.helperPath, path)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("apply server update: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
 }
 
 // handleSkipVersion handles skipping a version.
@@ -342,40 +318,14 @@ func (rt runtime) handleRollback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if backup exists
-	backupBinaryPath := filepath.Join(InsylusDir, InsylusBinaryName+".backup")
+	backupBinaryPath := rt.binaryPath + ".backup"
 	if _, err := os.Stat(backupBinaryPath); os.IsNotExist(err) {
 		http.Error(w, "No backup found to rollback to", http.StatusBadRequest)
 		return
 	}
 
-	// Perform rollback
-	currentBinaryPath := filepath.Join(InsylusDir, InsylusBinaryName)
-
-	// Stop service
-	if err := rt.stopService(); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to stop service"})
-		return
-	}
-
-	// Restore backup
-	binaryData, err := os.ReadFile(backupBinaryPath)
-	if err != nil {
-		rt.startService()
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to read backup"})
-		return
-	}
-
-	if err := os.WriteFile(currentBinaryPath, binaryData, 0755); err != nil {
-		rt.startService()
+	if err := rt.applyStagedBinary(backupBinaryPath); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to restore backup"})
-		return
-	}
-
-	os.Remove(backupBinaryPath)
-
-	// Start service
-	if err := rt.startService(); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to start service"})
 		return
 	}
 
@@ -390,28 +340,6 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
-}
-
-// CopyFile copies a file from src to dst.
-func copyFile(src, dst string) error {
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
-
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer dstFile.Close()
-
-	_, err = io.Copy(dstFile, srcFile)
-	if err != nil {
-		return err
-	}
-
-	return dstFile.Sync()
 }
 
 func versionTag(version string) string {

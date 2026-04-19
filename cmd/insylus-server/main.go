@@ -3,15 +3,22 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strings"
 
 	"insylus/internal/server"
+	"insylus/internal/version"
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "version" {
+		fmt.Println(version.ServerVersion)
+		return
+	}
+
 	if len(os.Args) > 1 && os.Args[1] == "sync-managed-ssh" {
 		runManagedSSHSync()
 		return

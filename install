@@ -143,6 +143,11 @@ install_deps() {
         missing+=("git")
     fi
 
+    # Check for sudo (needed by the server update helper)
+    if ! command -v sudo &>/dev/null; then
+        missing+=("sudo")
+    fi
+
     # Check for gcc (needed for CGO)
     if ! command -v gcc &>/dev/null; then
         missing+=("gcc")

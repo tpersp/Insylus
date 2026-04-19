@@ -19,7 +19,9 @@ const (
 	DefaultGitHubRepo   = "Insylus"
 	DefaultGitHubAPIURL = "https://api.github.com"
 	InsylusBinaryName   = "insylus-server"
-	InsylusDir          = "/opt/insylus/dist"
+	DefaultBinaryPath   = "/opt/insylus/bin/insylus-server"
+	DefaultHelperPath   = "/opt/insylus/bin/insylus-apply-server-update"
+	DefaultStagingDir   = "/var/lib/insylus/server-updates"
 )
 
 var ErrNoLatestRelease = errors.New("no published GitHub release found")
