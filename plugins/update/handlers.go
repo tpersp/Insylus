@@ -158,50 +158,54 @@ func (rt runtime) handleApplyUpdate(w http.ResponseWriter, r *http.Request) {
 
 // performUpdate performs the actual update process.
 func (rt runtime) performUpdate(ctx context.Context, updateID int64, version, downloadURL, checksumURL string) {
+	fail := func(format string, args ...any) {
+		_ = rt.store.UpdateUpdateStatusNotes(ctx, updateID, "failed", fmt.Sprintf(format, args...))
+	}
+
 	binaryData, err := rt.client.DownloadFile(ctx, downloadURL)
 	if err != nil {
-		rt.store.UpdateUpdateStatus(ctx, updateID, "failed")
+		fail("Download failed: %v", err)
 		return
 	}
 
 	// Step 2: Download and verify checksum
 	checksumData, err := rt.client.DownloadFile(ctx, checksumURL)
 	if err != nil {
-		rt.store.UpdateUpdateStatus(ctx, updateID, "failed")
+		fail("Checksum download failed: %v", err)
 		return
 	}
 
 	if err := rt.client.VerifyChecksum(binaryData, string(checksumData)); err != nil {
-		rt.store.UpdateUpdateStatus(ctx, updateID, "failed")
+		fail("Checksum verification failed: %v", err)
 		return
 	}
 
 	rt.store.UpdateUpdateStatus(ctx, updateID, "downloaded")
 
 	if err := os.MkdirAll(rt.stagingDir, 0750); err != nil {
-		rt.store.UpdateUpdateStatus(ctx, updateID, "failed")
+		fail("Create update staging directory failed: %v", err)
 		return
 	}
 
 	stagedBinaryPath := filepath.Join(rt.stagingDir, InsylusBinaryName+"-"+version)
 	if err := os.WriteFile(stagedBinaryPath, binaryData, 0755); err != nil {
-		rt.store.UpdateUpdateStatus(ctx, updateID, "failed")
+		fail("Write staged server binary failed: %v", err)
 		return
 	}
 
 	if err := rt.validateStagedBinary(stagedBinaryPath, version); err != nil {
-		rt.store.UpdateUpdateStatus(ctx, updateID, "failed")
+		fail("%v", err)
 		return
 	}
 
 	if err := rt.applyStagedBinary(stagedBinaryPath); err != nil {
-		rt.store.UpdateUpdateStatus(ctx, updateID, "failed")
+		fail("%v", err)
 		return
 	}
 
 	rt.store.UpdateUpdateStatus(ctx, updateID, "applied")
 	if err := rt.restartService(); err != nil {
-		rt.store.UpdateUpdateStatus(ctx, updateID, "failed")
+		fail("%v", err)
 	}
 }
 

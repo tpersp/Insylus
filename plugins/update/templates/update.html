@@ -79,6 +79,7 @@
               <th>Version</th>
               <th>Status</th>
               <th>Applied At</th>
+              <th>Details</th>
               <th></th>
             </tr>
           </thead>
@@ -88,6 +89,7 @@
               <td><code>{{ .Version }}</code></td>
               <td><span class="pill {{ if eq .Status "applied" }}pill-ok{{ else if eq .Status "failed" }}pill-error{{ else }}pill-muted{{ end }}">{{ .Status }}</span></td>
               <td>{{ if .AppliedAt }}{{ .AppliedAt }}{{ else }}-{{ end }}</td>
+              <td>{{ if .Notes }}{{ .Notes }}{{ else }}-{{ end }}</td>
               <td>
                 {{ if or (eq .Status "applied") (eq .Status "failed") }}
                 <button type="button" class="button-secondary compact-button" onclick="rollbackUpdate({{ .ID }})">Rollback</button>
@@ -95,7 +97,7 @@
               </td>
             </tr>
             {{ else }}
-            <tr><td colspan="4" class="muted">No update history yet.</td></tr>
+            <tr><td colspan="5" class="muted">No update history yet.</td></tr>
             {{ end }}
           </tbody>
         </table>

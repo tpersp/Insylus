@@ -142,14 +142,19 @@ func (s store) CreateUpdate(ctx context.Context, version, releasedAt, status, no
 
 // UpdateUpdateStatus updates the status of an update record.
 func (s store) UpdateUpdateStatus(ctx context.Context, id int64, status string) error {
+	return s.UpdateUpdateStatusNotes(ctx, id, status, "")
+}
+
+// UpdateUpdateStatusNotes updates the status and optional notes of an update record.
+func (s store) UpdateUpdateStatusNotes(ctx context.Context, id int64, status, notes string) error {
 	var query string
 	var args []any
 	if status == "applied" {
-		query = "update server_updates set status = ?, applied_at = datetime('now') where id = ?"
+		query = "update server_updates set status = ?, notes = ?, applied_at = datetime('now') where id = ?"
 	} else {
-		query = "update server_updates set status = ? where id = ?"
+		query = "update server_updates set status = ?, notes = ? where id = ?"
 	}
-	args = append(args, status, id)
+	args = append(args, status, notes, id)
 	_, err := s.db.ExecContext(ctx, query, args...)
 	return err
 }
