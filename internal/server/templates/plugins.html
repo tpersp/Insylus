@@ -29,7 +29,7 @@
     </div>
 
     <div class="restart-notice" id="restart-notice" style="display:none">
-      <strong>Restart required:</strong> Plugin changes require a server restart to take effect.
+      <strong>Restart required:</strong> Newly enabled plugins need a server restart before their pages, API routes, and nav links are loaded.
       <button onclick="restartService()">Restart Now</button>
     </div>
 
@@ -90,7 +90,12 @@
       try {
         const r = await fetch('/api/plugins/' + id + '/' + action, { method: 'POST' });
         if (r.ok) {
-          document.getElementById('restart-notice').style.display = 'block';
+          const result = await r.json();
+          if (result.restart === 'required') {
+            document.getElementById('restart-notice').style.display = 'block';
+          } else {
+            location.reload();
+          }
         } else {
           alert('Failed to ' + action + ' plugin');
         }
@@ -118,7 +123,7 @@
     function restartService() {
       if (confirm('Restart insylus.service now?')) {
         fetch('/api/restart', { method: 'POST' })
-          .then(r => { if (r.ok) location.reload(); else alert('Restart failed'); })
+          .then(r => { if (r.ok) setTimeout(() => location.reload(), 2500); else alert('Restart failed'); })
           .catch(() => alert('Restart failed'));
       }
     }

@@ -126,7 +126,10 @@ func runPlugins(app pluginhost.CLIHost, args []string) {
 			api.PrintRawJSON(resp.Body)
 			return
 		}
+		var result map[string]string
+		decode(resp.Body, &result)
 		fmt.Fprintf(os.Stdout, "%s %s\n", action, rest[0])
+		printRestartHint(result)
 	case "apply-profile":
 		if len(rest) != 1 {
 			fmt.Fprintln(os.Stderr, "usage: plugins apply-profile PROFILE")
@@ -138,7 +141,10 @@ func runPlugins(app pluginhost.CLIHost, args []string) {
 			api.PrintRawJSON(resp.Body)
 			return
 		}
+		var result map[string]string
+		decode(resp.Body, &result)
 		fmt.Fprintf(os.Stdout, "applied profile %s\n", rest[0])
+		printRestartHint(result)
 	default:
 		cmd, ok := app.Command(action)
 		if ok {
@@ -147,6 +153,15 @@ func runPlugins(app pluginhost.CLIHost, args []string) {
 		}
 		fmt.Fprintf(os.Stderr, "unknown plugin action: %s\n", action)
 		os.Exit(2)
+	}
+}
+
+func printRestartHint(result map[string]string) {
+	switch result["restart"] {
+	case "required":
+		fmt.Fprintln(os.Stdout, "restart insylus.service for newly enabled plugin routes and nav links to appear")
+	case "not_required":
+		fmt.Fprintln(os.Stdout, "disabled plugin routes are gated immediately")
 	}
 }
 

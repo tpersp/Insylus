@@ -177,8 +177,9 @@ type NavItem struct {
 }
 
 type StaticMount struct {
-	Prefix string
-	FS     fs.FS
+	PluginID string
+	Prefix   string
+	FS       fs.FS
 }
 
 type TemplateSet struct {

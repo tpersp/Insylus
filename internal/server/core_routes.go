@@ -12,7 +12,7 @@ import (
 )
 
 func (a *App) registerCoreRoutes() {
-	a.navItems = append(a.navItems, pluginhost.NavItem{Label: "Access Settings", Href: "/access/settings", Order: 60})
+	a.navItems = append(a.navItems, pluginhost.NavItem{PluginID: "access", Label: "Access Settings", Href: "/access/settings", Order: 60})
 	a.navItems = append(a.navItems, pluginhost.NavItem{Label: "Plugins", Href: "/plugins", Order: 90})
 	a.apiRoutes = append(a.apiRoutes,
 		routeDef{Pattern: "GET /api/plugins", Handler: a.handlePluginList},
@@ -30,10 +30,10 @@ func (a *App) registerCoreRoutes() {
 		routeDef{Pattern: "DELETE /api/targets/{id}", Handler: a.handleTargetDelete},
 	)
 	a.webRoutes = append(a.webRoutes,
-		routeDef{Pattern: "GET /access/settings", Handler: a.handleAccessSettingsPage},
-		routeDef{Pattern: "POST /access/settings/managed-account", Handler: a.handleAccessSettingsManagedAccount},
-		routeDef{Pattern: "GET /settings", Handler: a.handleAccessSettingsPage},
-		routeDef{Pattern: "POST /settings/managed-account", Handler: a.handleAccessSettingsManagedAccount},
+		routeDef{PluginID: "access", Pattern: "GET /access/settings", Handler: a.handleAccessSettingsPage},
+		routeDef{PluginID: "access", Pattern: "POST /access/settings/managed-account", Handler: a.handleAccessSettingsManagedAccount},
+		routeDef{PluginID: "access", Pattern: "GET /settings", Handler: a.handleAccessSettingsPage},
+		routeDef{PluginID: "access", Pattern: "POST /settings/managed-account", Handler: a.handleAccessSettingsManagedAccount},
 		routeDef{Pattern: "GET /plugins", Handler: a.handlePluginPage},
 	)
 }
@@ -59,7 +59,7 @@ func (a *App) handlePluginDisable(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, map[string]string{"status": "disabled", "restart": "required"})
+	a.writeJSON(w, http.StatusOK, map[string]string{"status": "disabled", "restart": "not_required"})
 }
 
 func (a *App) handlePluginPurge(w http.ResponseWriter, r *http.Request) {

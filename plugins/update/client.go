@@ -5,25 +5,31 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
 
 const (
-	GitHubOwner       = "Insylus"
-	GitHubRepo        = "Insylus"
-	GitHubAPIURL      = "https://api.github.com"
-	DownloadBaseURL   = "https://github.com/Insylus/Insylus/releases/download"
-	InsylusBinaryName = "insylus-server"
-	InsylusDir        = "/opt/insylus/dist"
+	DefaultGitHubOwner  = "tpersp"
+	DefaultGitHubRepo   = "Insylus"
+	DefaultGitHubAPIURL = "https://api.github.com"
+	InsylusBinaryName   = "insylus-server"
+	InsylusDir          = "/opt/insylus/dist"
 )
+
+var ErrNoLatestRelease = errors.New("no published GitHub release found")
 
 // GitHubClient interacts with the GitHub API.
 type GitHubClient struct {
 	httpClient *http.Client
+	apiURL     string
+	owner      string
+	repo       string
 }
 
 // NewGitHubClient creates a new GitHub API client.
@@ -32,12 +38,15 @@ func NewGitHubClient() *GitHubClient {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		apiURL: strings.TrimRight(envDefault("INSYLUS_UPDATE_GITHUB_API_URL", DefaultGitHubAPIURL), "/"),
+		owner:  envDefault("INSYLUS_UPDATE_GITHUB_OWNER", DefaultGitHubOwner),
+		repo:   envDefault("INSYLUS_UPDATE_GITHUB_REPO", DefaultGitHubRepo),
 	}
 }
 
 // FetchLatestRelease fetches the latest release from GitHub.
 func (c *GitHubClient) FetchLatestRelease(ctx context.Context) (*GitHubRelease, error) {
-	apiURL := fmt.Sprintf("%s/repos/%s/%s/releases/latest", GitHubAPIURL, GitHubOwner, GitHubRepo)
+	apiURL := fmt.Sprintf("%s/repos/%s/%s/releases/latest", c.apiURL, c.owner, c.repo)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
@@ -53,6 +62,9 @@ func (c *GitHubClient) FetchLatestRelease(ctx context.Context) (*GitHubRelease, 
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrNoLatestRelease
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
 	}
@@ -67,12 +79,12 @@ func (c *GitHubClient) FetchLatestRelease(ctx context.Context) (*GitHubRelease, 
 
 // GetDownloadURL returns the download URL for a specific version.
 func (c *GitHubClient) GetDownloadURL(version string) string {
-	return fmt.Sprintf("%s/%s/%s", DownloadBaseURL, version, InsylusBinaryName)
+	return fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s", c.owner, c.repo, version, InsylusBinaryName)
 }
 
 // GetChecksumURL returns the checksum file URL for a specific version.
 func (c *GitHubClient) GetChecksumURL(version string) string {
-	return fmt.Sprintf("%s/%s/%s-%s.sha256", DownloadBaseURL, version, InsylusBinaryName, version)
+	return fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s-%s.sha256", c.owner, c.repo, version, InsylusBinaryName, version)
 }
 
 // DownloadFile downloads a file and returns its content.
@@ -131,4 +143,12 @@ func decodeJSON(r io.Reader, v any) error {
 // ExtractVersionFromTag extracts the version string from a GitHub tag (removes 'v' prefix).
 func ExtractVersionFromTag(tag string) string {
 	return strings.TrimPrefix(tag, "v")
+}
+
+func envDefault(key, fallback string) string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	return value
 }

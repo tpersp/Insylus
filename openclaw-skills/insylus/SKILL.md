@@ -14,6 +14,7 @@ Use this skill when you need to find a device, locate a running service, check i
 - Use `--find VALUE` for lookup by name, hostname, IP, or ID.
 - Prefer `--json` for machine-readable output.
 - Check enabled plugins before assuming a command or route exists.
+- Disabled plugin web routes, API routes, and static assets return `404` immediately; newly enabled plugins may require an `insylus.service` restart before their routes exist.
 - Managed SSH requires the Access plugin and a successfully applied access policy.
 - Insylus never creates API tokens for external services — a human must create and register them.
 - Topology is a web map only; not available via CLI or API.
