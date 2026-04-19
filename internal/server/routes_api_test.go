@@ -46,6 +46,81 @@ func TestPluginRuntimeAPI(t *testing.T) {
 	}
 }
 
+func TestPluginDisableGatesRegisteredSurfacesWithoutRestart(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+	handler := app.Handler()
+
+	if status := responseStatus(handler, http.MethodGet, "/update", nil); status != http.StatusOK {
+		t.Fatalf("GET /update before disable status = %d, want 200", status)
+	}
+	if status := responseStatus(handler, http.MethodGet, "/plugin-assets/update/update.js", nil); status != http.StatusOK {
+		t.Fatalf("GET update asset before disable status = %d, want 200", status)
+	}
+
+	doJSONRequest(t, handler, http.MethodPost, "/api/plugins/update/disable", "", nil, nil)
+
+	if status := responseStatus(handler, http.MethodGet, "/update", nil); status != http.StatusNotFound {
+		t.Fatalf("GET /update after disable status = %d, want 404", status)
+	}
+	if status := responseStatus(handler, http.MethodPost, "/api/update/check", nil); status != http.StatusNotFound {
+		t.Fatalf("POST /api/update/check after disable status = %d, want 404", status)
+	}
+	if status := responseStatus(handler, http.MethodGet, "/plugin-assets/update/update.js", nil); status != http.StatusNotFound {
+		t.Fatalf("GET update asset after disable status = %d, want 404", status)
+	}
+	if status := responseStatus(handler, http.MethodGet, "/api/plugins", nil); status != http.StatusOK {
+		t.Fatalf("GET /api/plugins after update disable status = %d, want 200", status)
+	}
+}
+
+func TestAccessDisableGatesSettingsRoutesWithoutRestart(t *testing.T) {
+	app := newTestAppWithEnabledPlugins(t, Config{
+		DBPath: filepath.Join(t.TempDir(), "insylus.db"),
+	}, "access")
+	defer app.Close()
+	handler := app.Handler()
+
+	if status := responseStatus(handler, http.MethodGet, "/access/settings", nil); status != http.StatusOK {
+		t.Fatalf("GET /access/settings before disable status = %d, want 200", status)
+	}
+	if status := responseStatus(handler, http.MethodGet, "/settings", nil); status != http.StatusOK {
+		t.Fatalf("GET /settings before disable status = %d, want 200", status)
+	}
+
+	doJSONRequest(t, handler, http.MethodPost, "/api/plugins/access/disable", "", nil, nil)
+
+	if status := responseStatus(handler, http.MethodGet, "/access/settings", nil); status != http.StatusNotFound {
+		t.Fatalf("GET /access/settings after disable status = %d, want 404", status)
+	}
+	if status := responseStatus(handler, http.MethodGet, "/settings", nil); status != http.StatusNotFound {
+		t.Fatalf("GET /settings after disable status = %d, want 404", status)
+	}
+
+	form := url.Values{"managed_user": {"remote"}}
+	if status := responseStatus(handler, http.MethodPost, "/access/settings/managed-account", bytes.NewBufferString(form.Encode())); status != http.StatusNotFound {
+		t.Fatalf("POST /access/settings/managed-account after disable status = %d, want 404", status)
+	}
+}
+
+func TestDisabledAtStartupRoutesDoNotFallThroughToDashboard(t *testing.T) {
+	app := newTestAppWithOnlyPlugins(t, Config{
+		DBPath: filepath.Join(t.TempDir(), "insylus.db"),
+	}, "dashboard", "help")
+	defer app.Close()
+	handler := app.Handler()
+
+	if status := responseStatus(handler, http.MethodGet, "/", nil); status != http.StatusOK {
+		t.Fatalf("GET / status = %d, want 200", status)
+	}
+	if status := responseStatus(handler, http.MethodGet, "/devices", nil); status != http.StatusNotFound {
+		t.Fatalf("GET /devices with devices disabled at startup status = %d, want 404", status)
+	}
+	if status := responseStatus(handler, http.MethodGet, "/api/devices", nil); status != http.StatusNotFound {
+		t.Fatalf("GET /api/devices with devices disabled at startup status = %d, want 404", status)
+	}
+}
+
 func TestWebLandingAndDevicesRoutes(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()
@@ -317,10 +392,10 @@ func TestSettingsManagedAccountFormUpdatesAgentPolicy(t *testing.T) {
 }
 
 func TestAccessSettingsPageAndFormAlias(t *testing.T) {
-	app := newTestAppWithConfig(t, Config{
+	app := newTestAppWithEnabledPlugins(t, Config{
 		DBPath:      filepath.Join(t.TempDir(), "insylus.db"),
 		ManagedUser: "operator",
-	})
+	}, "access")
 	defer app.Close()
 
 	page := httptest.NewRecorder()
@@ -430,6 +505,35 @@ func newTestAppWithEnabledPlugins(t *testing.T, cfg Config, enabledPluginIDs ...
 	return newTestAppWithConfig(t, cfg)
 }
 
+func newTestAppWithOnlyPlugins(t *testing.T, cfg Config, enabledPluginIDs ...string) *App {
+	t.Helper()
+	if cfg.DBPath == "" {
+		cfg.DBPath = filepath.Join(t.TempDir(), "insylus.db")
+	}
+	store, err := OpenStore(cfg.DBPath)
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	if err := store.EnsurePluginSettings(context.Background(), registry.Plugins()); err != nil {
+		_ = store.Close()
+		t.Fatalf("EnsurePluginSettings: %v", err)
+	}
+	enabled := map[string]bool{}
+	for _, id := range enabledPluginIDs {
+		enabled[id] = true
+	}
+	for _, plugin := range registry.Plugins() {
+		if err := store.SetPluginEnabled(context.Background(), plugin.ID(), enabled[plugin.ID()]); err != nil {
+			_ = store.Close()
+			t.Fatalf("SetPluginEnabled(%q): %v", plugin.ID(), err)
+		}
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close store: %v", err)
+	}
+	return newTestAppWithConfig(t, cfg)
+}
+
 func sameStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
@@ -487,4 +591,14 @@ func doJSONRequest(t *testing.T, handler http.Handler, method, path, token strin
 			t.Fatalf("Decode: %v", err)
 		}
 	}
+}
+
+func responseStatus(handler http.Handler, method, path string, body io.Reader) int {
+	req := httptest.NewRequest(method, path, body)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	return rec.Code
 }

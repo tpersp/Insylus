@@ -20,6 +20,8 @@ On the controller host, it provides:
 - `/api/targets` for neutral target lookup
 - optional plugin surfaces such as Devices, Agent, Access, Docker, Proxmox, Jellyfin, Services, Topology, and Wake
 
+Disabling a plugin gates its already-registered web routes, API routes, and plugin static assets immediately; they return `404` without waiting for a restart. Enabling a plugin that was disabled at startup requires restarting `insylus.service` before its routes and assets are available.
+
 When the Agent plugin is enabled, enrolled devices report inventory data:
 
 - host health and last check-in state
@@ -475,7 +477,7 @@ If the command is still not found:
 
 Controller install defaults can be changed with `INSYLUS_INSTALL_ROOT`, `INSYLUS_BIN_DIR`, `INSYLUS_DATA_DIR`, `INSYLUS_LISTEN_ADDR`, `INSYLUS_APP_USER`, and `INSYLUS_APP_GROUP` when running `scripts/install-insylus-service.sh`. The controller service account is distinct from the remote managed-access account configured with `INSYLUS_MANAGED_USER`.
 
-Managed user and audit group defaults can be changed from Access Settings at `/access/settings`; the legacy `/settings` path also works. The persisted database setting overrides install-time managed-account defaults for future agent policy fetches. When access is enabled on a device, the agent links the account if it already exists or creates it if it is missing. Passwordless sudo is controlled per device by setting access mode to `sudo`.
+Managed user and audit group defaults can be changed from Access Settings at `/access/settings`; the legacy `/settings` path also works while the Access plugin is enabled. The persisted database setting overrides install-time managed-account defaults for future agent policy fetches. When access is enabled on a device, the agent links the account if it already exists or creates it if it is missing. Passwordless sudo is controlled per device by setting access mode to `sudo`.
 
 Agent auto-update defaults can be changed from Agent Settings at `/agent/settings`.
 

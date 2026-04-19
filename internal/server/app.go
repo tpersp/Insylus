@@ -69,7 +69,7 @@ func New(cfg Config, logger *log.Logger) (*App, error) {
 		if !app.plugins.Enabled(plugin.ID()) {
 			continue
 		}
-		if err := plugin.Register(host); err != nil {
+		if err := plugin.Register(host.ForPlugin(plugin.ID())); err != nil {
 			return nil, err
 		}
 	}
@@ -134,15 +134,28 @@ func (a *App) Handler() http.Handler {
 	}
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 	for _, mount := range a.staticMounts {
-		mux.Handle("GET "+mount.Prefix, http.StripPrefix(mount.Prefix, http.FileServer(http.FS(mount.FS))))
+		mux.Handle("GET "+mount.Prefix, a.pluginGate(mount.PluginID, http.StripPrefix(mount.Prefix, http.FileServer(http.FS(mount.FS)))))
 	}
 	for _, route := range a.apiRoutes {
-		mux.HandleFunc(route.Pattern, route.Handler)
+		mux.Handle(route.Pattern, a.pluginGate(route.PluginID, http.HandlerFunc(route.Handler)))
 	}
 	for _, route := range a.webRoutes {
-		mux.HandleFunc(route.Pattern, route.Handler)
+		mux.Handle(route.Pattern, a.pluginGate(route.PluginID, http.HandlerFunc(route.Handler)))
 	}
 	return mux
+}
+
+func (a *App) pluginGate(pluginID string, next http.Handler) http.Handler {
+	if pluginID == "" {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !a.plugins.Enabled(pluginID) {
+			http.NotFound(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (a *App) render(w http.ResponseWriter, name string, data any) {

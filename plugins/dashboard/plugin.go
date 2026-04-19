@@ -39,7 +39,7 @@ func (Plugin) Register(host pluginhost.Host) error {
 		}
 		host.Web().NavItem(pluginhost.NavItem{PluginID: "dashboard", Label: "Dashboard", Href: "/", Order: 0})
 		host.Web().Templates(templateFS, "templates/*.html")
-		host.Web().HandleFunc("GET /", rt.handlePage)
+		host.Web().HandleFunc("GET /{$}", rt.handlePage)
 	}
 	return nil
 }

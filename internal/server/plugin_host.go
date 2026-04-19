@@ -15,17 +15,20 @@ import (
 )
 
 type routeDef struct {
-	Pattern string
-	Handler http.HandlerFunc
+	PluginID string
+	Pattern  string
+	Handler  http.HandlerFunc
 }
 
 type serverPluginHost struct {
-	app *App
+	app      *App
+	pluginID string
 }
 
 type serverRouteHost struct {
-	enabled bool
-	routes  *[]routeDef
+	enabled  bool
+	pluginID string
+	routes   *[]routeDef
 }
 
 type serverWebHost struct {
@@ -64,14 +67,18 @@ func (h serverPluginHost) CLI() pluginhost.CLIHost {
 }
 
 func (h serverPluginHost) API() pluginhost.RouteHost {
-	return serverRouteHost{enabled: true, routes: &h.app.apiRoutes}
+	return serverRouteHost{enabled: true, pluginID: h.pluginID, routes: &h.app.apiRoutes}
 }
 
 func (h serverPluginHost) Web() pluginhost.WebHost {
 	return serverWebHost{
-		serverRouteHost: serverRouteHost{enabled: true, routes: &h.app.webRoutes},
+		serverRouteHost: serverRouteHost{enabled: true, pluginID: h.pluginID, routes: &h.app.webRoutes},
 		app:             h.app,
 	}
+}
+
+func (h serverPluginHost) ForPlugin(pluginID string) serverPluginHost {
+	return serverPluginHost{app: h.app, pluginID: pluginID}
 }
 
 func (h serverPluginHost) Data() pluginhost.DataHost {
@@ -110,7 +117,7 @@ func (h serverRouteHost) HandleFunc(pattern string, handler http.HandlerFunc) {
 	if !h.enabled || handler == nil {
 		return
 	}
-	*h.routes = append(*h.routes, routeDef{Pattern: pattern, Handler: handler})
+	*h.routes = append(*h.routes, routeDef{PluginID: h.pluginID, Pattern: pattern, Handler: handler})
 }
 
 func (h serverWebHost) NavItem(item pluginhost.NavItem) {
@@ -122,7 +129,7 @@ func (h serverWebHost) Templates(fsys fs.FS, patterns ...string) {
 }
 
 func (h serverWebHost) Static(prefix string, fsys fs.FS) {
-	h.app.staticMounts = append(h.app.staticMounts, pluginhost.StaticMount{Prefix: prefix, FS: fsys})
+	h.app.staticMounts = append(h.app.staticMounts, pluginhost.StaticMount{PluginID: h.pluginID, Prefix: prefix, FS: fsys})
 }
 
 func (h serverWebHost) Render(w http.ResponseWriter, name string, data any) {
