@@ -100,7 +100,12 @@ func (rt runtime) handleBootstrapRegister(w http.ResponseWriter, r *http.Request
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if _, err := rt.targets.Update(r.Context(), targetID, pluginhost.TargetInput{Name: targetID, Hostname: req.Hostname, Kind: "linux-host"}); err != nil {
+	target, err := rt.targets.Get(r.Context(), targetID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if _, err := rt.targets.Update(r.Context(), targetID, pluginhost.TargetInput{Name: target.Name, Hostname: req.Hostname, Kind: target.Kind}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
