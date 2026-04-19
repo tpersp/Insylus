@@ -200,6 +200,9 @@ func (rt runtime) performUpdate(ctx context.Context, updateID int64, version, do
 	}
 
 	rt.store.UpdateUpdateStatus(ctx, updateID, "applied")
+	if err := rt.restartService(); err != nil {
+		rt.store.UpdateUpdateStatus(ctx, updateID, "failed")
+	}
 }
 
 func (rt runtime) validateStagedBinary(path, expectedVersion string) error {
@@ -216,9 +219,17 @@ func (rt runtime) validateStagedBinary(path, expectedVersion string) error {
 }
 
 func (rt runtime) applyStagedBinary(path string) error {
-	cmd := exec.Command("sudo", "-n", rt.helperPath, path)
+	cmd := exec.Command("sudo", "-n", rt.helperPath, "apply", path)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("apply server update: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func (rt runtime) restartService() error {
+	cmd := exec.Command("sudo", "-n", rt.helperPath, "restart")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("restart server: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return nil
 }
@@ -331,6 +342,10 @@ func (rt runtime) handleRollback(w http.ResponseWriter, r *http.Request) {
 
 	// Update record
 	rt.store.UpdateUpdateStatus(r.Context(), targetUpdate.ID, "rolled_back")
+	if err := rt.restartService(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to restart service"})
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

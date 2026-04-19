@@ -1,13 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-STAGED_BINARY="${1:-}"
+ACTION="${1:-}"
 SERVICE_NAME="${INSYLUS_SERVICE_NAME:-insylus.service}"
 TARGET_BINARY="${INSYLUS_SERVER_BINARY:-/opt/insylus/bin/insylus-server}"
 
 if [[ "$EUID" -ne 0 ]]; then
   echo "apply-server-update must run as root" >&2
   exit 1
+fi
+
+if [[ "$ACTION" == "restart" ]]; then
+  systemctl restart --no-block "$SERVICE_NAME"
+  exit 0
+fi
+
+if [[ "$ACTION" == "apply" ]]; then
+  STAGED_BINARY="${2:-}"
+else
+  STAGED_BINARY="$ACTION"
 fi
 
 if [[ -z "$STAGED_BINARY" || ! -f "$STAGED_BINARY" ]]; then
@@ -45,5 +56,3 @@ trap cleanup EXIT
 install -o "$OWNER" -g "$GROUP" -m 0755 "$STAGED_BINARY" "$TMP_TARGET"
 mv -f "$TMP_TARGET" "$TARGET_BINARY"
 trap - EXIT
-
-systemctl restart --no-block "$SERVICE_NAME"
