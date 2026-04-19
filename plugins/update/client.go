@@ -125,6 +125,12 @@ func serverAssetNameCandidates(goos, goarch string) []string {
 	return append(names, InsylusBinaryName)
 }
 
+func serverAssetName(tagName string, goos, goarch string) (binary, checksum string) {
+	binary = fmt.Sprintf("%s-%s-%s", InsylusBinaryName, goos, goarch)
+	checksum = fmt.Sprintf("%s-%s-%s.sha256", InsylusBinaryName, goos, goarch, strings.TrimPrefix(tagName, "v"))
+	return binary, checksum
+}
+
 // DownloadFile downloads a file and returns its content.
 func (c *GitHubClient) DownloadFile(ctx context.Context, fileURL string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fileURL, nil)

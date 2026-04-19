@@ -35,7 +35,6 @@ func (Plugin) Register(host pluginhost.Host) error {
 		host.Web().Templates(templateFS, "templates/*.html")
 		host.Web().HandleFunc("GET /agent/settings", rt.handleAgentSettingsPage)
 		host.Web().HandleFunc("POST /agent/settings/auto-update", rt.handleUpdateAgentAutoUpdateDefault)
-		host.Web().HandleFunc("GET /devices/{id}/install", rt.handleInstallPage)
 		host.Web().HandleFunc("GET /install.sh", rt.handleInstallScript)
 	}
 	if host.API().Enabled() {
