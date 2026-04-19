@@ -32,6 +32,28 @@ go build ./cmd/insylus-agent
 go build ./cmd/insylusctl
 ```
 
+Normal source builds identify the controller/server as `dev`. That is fine for local development, but the Server Update plugin compares the running controller version with GitHub release tags. For an install that should participate in release update checks, build the server with the release version stamped into the binary:
+
+```bash
+VERSION=2026.04.19
+go build -ldflags "-X insylus/internal/version.ServerVersion=$VERSION" -o dist/insylus-server ./cmd/insylus-server
+go build -o dist/insylus-agent ./cmd/insylus-agent
+go build -o dist/insylusctl ./cmd/insylusctl
+```
+
+If building from a checked-out release tag, derive the version from Git:
+
+```bash
+git fetch --tags
+git checkout v2026.04.19
+VERSION="$(git describe --tags --exact-match | sed 's/^v//')"
+go build -ldflags "-X insylus/internal/version.ServerVersion=$VERSION" -o dist/insylus-server ./cmd/insylus-server
+go build -o dist/insylus-agent ./cmd/insylus-agent
+go build -o dist/insylusctl ./cmd/insylusctl
+```
+
+The release tag alone does not change the version embedded in the binary. The `-ldflags` value is what makes the Server Update plugin show the installed controller version instead of `dev`.
+
 ## Install as a system service
 
 After building both binaries, install the persistent `systemd` service:
@@ -66,6 +88,22 @@ Key distinction:
 - `INSYLUS_MANAGED_USER` = remote account created on enrolled devices for managed SSH access
 
 After installation, the remote managed user and audit groups can be changed from the Settings page. Those values are stored in the controller database and override the install-time defaults.
+
+## Server updates
+
+The Server Update plugin checks the latest GitHub release for the controller/server version. Source-built installs show `dev` unless the server binary was built with `ServerVersion` stamped as shown above.
+
+For an in-app server update to apply successfully, the GitHub release must include these assets:
+
+- `insylus-server`
+- `insylus-server-<tag>.sha256`
+
+For example, release tag `v2026.04.19` should include:
+
+- `insylus-server`
+- `insylus-server-v2026.04.19.sha256`
+
+If release assets are not present, the update page can detect the latest release but cannot install it automatically.
 
 To remove the service:
 

@@ -23,6 +23,7 @@ const (
 )
 
 var ErrNoLatestRelease = errors.New("no published GitHub release found")
+var ErrMissingReleaseAssets = errors.New("server update package is not available")
 
 // GitHubClient interacts with the GitHub API.
 type GitHubClient struct {
@@ -47,7 +48,16 @@ func NewGitHubClient() *GitHubClient {
 // FetchLatestRelease fetches the latest release from GitHub.
 func (c *GitHubClient) FetchLatestRelease(ctx context.Context) (*GitHubRelease, error) {
 	apiURL := fmt.Sprintf("%s/repos/%s/%s/releases/latest", c.apiURL, c.owner, c.repo)
+	return c.fetchRelease(ctx, apiURL)
+}
 
+// FetchReleaseByTag fetches a GitHub release by tag.
+func (c *GitHubClient) FetchReleaseByTag(ctx context.Context, tag string) (*GitHubRelease, error) {
+	apiURL := fmt.Sprintf("%s/repos/%s/%s/releases/tags/%s", c.apiURL, c.owner, c.repo, tag)
+	return c.fetchRelease(ctx, apiURL)
+}
+
+func (c *GitHubClient) fetchRelease(ctx context.Context, apiURL string) (*GitHubRelease, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -77,14 +87,26 @@ func (c *GitHubClient) FetchLatestRelease(ctx context.Context) (*GitHubRelease, 
 	return &release, nil
 }
 
-// GetDownloadURL returns the download URL for a specific version.
-func (c *GitHubClient) GetDownloadURL(version string) string {
-	return fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s", c.owner, c.repo, version, InsylusBinaryName)
-}
-
-// GetChecksumURL returns the checksum file URL for a specific version.
-func (c *GitHubClient) GetChecksumURL(version string) string {
-	return fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s-%s.sha256", c.owner, c.repo, version, InsylusBinaryName, version)
+// ReleaseAssetURLs returns the server binary and checksum URLs from release assets.
+func ReleaseAssetURLs(release *GitHubRelease) (string, string, error) {
+	if release == nil {
+		return "", "", ErrMissingReleaseAssets
+	}
+	checksumName := fmt.Sprintf("%s-%s.sha256", InsylusBinaryName, release.TagName)
+	var binaryURL string
+	var checksumURL string
+	for _, asset := range release.Assets {
+		switch asset.Name {
+		case InsylusBinaryName:
+			binaryURL = strings.TrimSpace(asset.BrowserDownloadURL)
+		case checksumName:
+			checksumURL = strings.TrimSpace(asset.BrowserDownloadURL)
+		}
+	}
+	if binaryURL == "" || checksumURL == "" {
+		return "", "", ErrMissingReleaseAssets
+	}
+	return binaryURL, checksumURL, nil
 }
 
 // DownloadFile downloads a file and returns its content.
