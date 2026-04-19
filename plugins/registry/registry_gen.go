@@ -14,6 +14,7 @@ import (
 	"insylus/plugins/proxmox"
 	"insylus/plugins/services"
 	"insylus/plugins/topology"
+	"insylus/plugins/update"
 	"insylus/plugins/wake"
 )
 
@@ -29,6 +30,7 @@ func Plugins() []pluginhost.Plugin {
 		proxmox.New(),
 		services.New(),
 		topology.New(),
+		update.New(),
 		wake.New(),
 	}
 }

@@ -1,0 +1,118 @@
+{{ define "update.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Server Update</title>
+  {{ template "head-assets" . }}
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page">
+    <section class="grid">
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">System</p>
+            <h2>Server Update</h2>
+          </div>
+        </div>
+        <p>Update the Insylus server to the latest version. Your data and settings will be preserved.</p>
+
+        <div class="version-display">
+          <div class="version-info">
+            <span class="version-label">Current Version</span>
+            <span class="version-number">{{ .CurrentVersion }}</span>
+          </div>
+          <div class="version-info">
+            <span class="version-label">Latest Version</span>
+            <span class="version-number" id="latest-version">Checking...</span>
+          </div>
+        </div>
+
+        <div id="update-status" class="update-status"></div>
+
+        <div class="button-group">
+          <button type="button" id="check-updates-btn" class="button-primary">Check for Updates</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Release Notes</p>
+            <h2>What's New</h2>
+          </div>
+        </div>
+        <div id="release-notes" class="release-notes">
+          <p class="muted">Click "Check for Updates" to see release notes.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Settings</p>
+          <h2>Auto-Update</h2>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="auto-update-toggle" {{ if .AutoUpdate }}checked{{ end }}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <p>When enabled, the server will automatically download and install updates. The service will restart during the update process.</p>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">History</p>
+          <h2>Update History</h2>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="device-table">
+          <thead>
+            <tr>
+              <th>Version</th>
+              <th>Status</th>
+              <th>Applied At</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="update-history-body">
+            {{ range .Updates }}
+            <tr>
+              <td><code>{{ .Version }}</code></td>
+              <td><span class="pill {{ if eq .Status "applied" }}pill-ok{{ else if eq .Status "failed" }}pill-error{{ else }}pill-muted{{ end }}">{{ .Status }}</span></td>
+              <td>{{ if .AppliedAt }}{{ .AppliedAt }}{{ else }}-{{ end }}</td>
+              <td>
+                {{ if or (eq .Status "applied") (eq .Status "failed") }}
+                <button type="button" class="button-secondary compact-button" onclick="rollbackUpdate({{ .ID }})">Rollback</button>
+                {{ end }}
+              </td>
+            </tr>
+            {{ else }}
+            <tr><td colspan="4" class="muted">No update history yet.</td></tr>
+            {{ end }}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script>
+    window.UPDATE_API = {
+      check: '/api/update/check',
+      apply: '/api/update/apply',
+      skip: '/update/skip',
+      autoUpdate: '/update/auto-update',
+      rollback: '/update/rollback'
+    };
+    window.CURRENT_VERSION = '{{ .CurrentVersion }}';
+  </script>
+  <script src="/plugin-assets/update/update.js" defer></script>
+</body>
+</html>
+{{ end }}
