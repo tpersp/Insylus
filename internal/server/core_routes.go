@@ -35,6 +35,7 @@ func (a *App) registerCoreRoutes() {
 		routeDef{PluginID: "access", Pattern: "GET /settings", Handler: a.handleAccessSettingsPage},
 		routeDef{PluginID: "access", Pattern: "POST /settings/managed-account", Handler: a.handleAccessSettingsManagedAccount},
 		routeDef{Pattern: "GET /plugins", Handler: a.handlePluginPage},
+		routeDef{Pattern: "GET /devices/{id}/install", Handler: a.handleInstallPage},
 	)
 }
 

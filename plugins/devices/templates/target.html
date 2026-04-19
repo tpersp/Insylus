@@ -19,6 +19,9 @@
           </div>
           <span class="pill">{{ if .Target.Kind }}{{ .Target.Kind }}{{ else }}target{{ end }}</span>
         </div>
+        <div class="section-actions">
+          <a class="button-link" href="/devices/{{ .Target.ID }}/install">Install agent</a>
+        </div>
         <div class="facts">
           <p><span>API URL</span>{{ if .Target.APIURL }}<code>{{ .Target.APIURL }}</code>{{ else }}<span class="muted">none</span>{{ end }}</p>
           <p><span>SSH host</span>{{ if .Target.SSHHost }}<code>{{ .Target.SSHHost }}</code>{{ else }}<span class="muted">none</span>{{ end }}</p>

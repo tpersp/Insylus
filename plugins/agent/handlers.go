@@ -49,7 +49,7 @@ func (rt runtime) handleUpdateAgentAutoUpdateDefault(w http.ResponseWriter, r *h
 }
 
 func (rt runtime) handleInstallPage(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "agent install pages are target-owned now; use /install.sh with a bootstrap token", http.StatusNotImplemented)
+	http.Redirect(w, r, "/devices/"+r.PathValue("id")+"/install", http.StatusSeeOther)
 }
 
 func (rt runtime) handleInstallScript(w http.ResponseWriter, r *http.Request) {
