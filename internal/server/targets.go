@@ -181,7 +181,13 @@ func (s targetService) Update(ctx context.Context, id string, input pluginhost.T
 }
 
 func (s targetService) Delete(ctx context.Context, id string) error {
-	res, err := s.store.db.ExecContext(ctx, `delete from targets where id = ?`, strings.TrimSpace(id))
+	id = strings.TrimSpace(id)
+	tx, err := s.store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, `delete from targets where id = ?`, id)
 	if err != nil {
 		return err
 	}
@@ -189,7 +195,10 @@ func (s targetService) Delete(ctx context.Context, id string) error {
 	if affected == 0 {
 		return sql.ErrNoRows
 	}
-	return nil
+	if _, err := tx.ExecContext(ctx, `delete from devices where id = ?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s targetService) SetMetadata(ctx context.Context, targetID, pluginID string, metadata map[string]any) error {
