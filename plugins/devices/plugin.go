@@ -50,6 +50,7 @@ func (Plugin) Register(host pluginhost.Host) error {
 		host.Web().HandleFunc("POST /devices", rt.handleCreateTarget)
 		host.Web().HandleFunc("GET /devices/{id}", rt.handleTargetPage)
 		host.Web().HandleFunc("POST /devices/{id}/note", rt.handleUpdateTargetNote)
+		host.Web().HandleFunc("POST /devices/{id}/delete", rt.handleDeleteTarget)
 	}
 	if host.API().Enabled() {
 		rt := runtime{targets: host.Targets(), inventory: host.Data().Inventory(), managed: managedProvider(host)}

@@ -87,6 +87,19 @@ func (rt runtime) handleUpdateTargetNote(w http.ResponseWriter, r *http.Request)
 	http.Redirect(w, r, "/devices/"+target.ID, http.StatusSeeOther)
 }
 
+func (rt runtime) handleDeleteTarget(w http.ResponseWriter, r *http.Request) {
+	targetID := r.PathValue("id")
+	if err := rt.targets.Delete(r.Context(), targetID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/devices", http.StatusSeeOther)
+}
+
 func (rt runtime) handleTargetsAPI(w http.ResponseWriter, r *http.Request) {
 	view, ok := inventoryViewFromRequest(w, r, "compact")
 	if !ok {
