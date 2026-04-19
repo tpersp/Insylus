@@ -102,10 +102,18 @@ func (s targetService) Create(ctx context.Context, input pluginhost.TargetInput)
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	id := randomToken(12)
+	bootstrapToken := randomToken(24)
 	ipsJSON, _ := json.Marshal(input.IPs)
 	tagsJSON, _ := json.Marshal(input.Tags)
 	tx, err := s.store.db.BeginTx(ctx, nil)
 	if err != nil {
+		return pluginhost.Target{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		insert into devices (id, name, bootstrap_token, created_at, updated_at)
+		values (?, ?, ?, ?, ?)`,
+		id, input.Name, bootstrapToken, now, now); err != nil {
+		_ = tx.Rollback()
 		return pluginhost.Target{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `
