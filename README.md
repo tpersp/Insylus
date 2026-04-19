@@ -24,7 +24,35 @@ go build -o dist/insylus-agent ./cmd/insylus-agent
 go run ./cmd/insylus-server -listen :8080 -db ./insylus.db -agent-binary ./dist/insylus-agent
 ```
 
-## Build binaries
+## Install from Git
+
+The normal install flow is:
+
+```bash
+git clone https://github.com/tpersp/Insylus.git
+cd Insylus
+sudo bash install
+```
+
+The installer builds the binaries, installs the `systemd` service, and starts Insylus. If the checkout is exactly on a Git release tag such as `v2026.04.19`, the installer stamps that version into the server binary so the Server Update plugin can compare the installed controller against GitHub releases. If the checkout is on a branch or an untagged commit, the server version is `dev`.
+
+To install a specific release from source:
+
+```bash
+git clone https://github.com/tpersp/Insylus.git
+cd Insylus
+git fetch --tags
+git checkout v2026.04.19
+sudo bash install
+```
+
+You can also override the stamped server version explicitly:
+
+```bash
+sudo env INSYLUS_SERVER_VERSION=2026.04.19 bash install
+```
+
+## Build binaries manually
 
 ```bash
 go build ./cmd/insylus-server
@@ -32,31 +60,16 @@ go build ./cmd/insylus-agent
 go build ./cmd/insylusctl
 ```
 
-Normal source builds identify the controller/server as `dev`. That is fine for local development, but the Server Update plugin compares the running controller version with GitHub release tags. For an install that should participate in release update checks, build the server with the release version stamped into the binary:
+Manual `go build` commands identify the controller/server as `dev` unless you stamp a version yourself. To produce a manually built server binary that participates in release update checks:
 
 ```bash
 VERSION=2026.04.19
 go build -ldflags "-X insylus/internal/version.ServerVersion=$VERSION" -o dist/insylus-server ./cmd/insylus-server
-go build -o dist/insylus-agent ./cmd/insylus-agent
-go build -o dist/insylusctl ./cmd/insylusctl
 ```
-
-If building from a checked-out release tag, derive the version from Git:
-
-```bash
-git fetch --tags
-git checkout v2026.04.19
-VERSION="$(git describe --tags --exact-match | sed 's/^v//')"
-go build -ldflags "-X insylus/internal/version.ServerVersion=$VERSION" -o dist/insylus-server ./cmd/insylus-server
-go build -o dist/insylus-agent ./cmd/insylus-agent
-go build -o dist/insylusctl ./cmd/insylusctl
-```
-
-The release tag alone does not change the version embedded in the binary. The `-ldflags` value is what makes the Server Update plugin show the installed controller version instead of `dev`.
 
 ## Install as a system service
 
-After building both binaries, install the persistent `systemd` service:
+After building binaries manually, install the persistent `systemd` service:
 
 ```bash
 sudo bash ./scripts/install-insylus-service.sh

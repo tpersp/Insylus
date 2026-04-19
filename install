@@ -27,6 +27,7 @@ Environment variables (optional overrides):
   INSYLUS_APP_GROUP        Local service group (default: insylus)
   INSYLUS_MANAGED_USER     Remote managed user on enrolled devices (default: bob)
   INSYLUS_MANAGED_GROUPS   Remote groups for managed user on devices (default: adm,systemd-journal)
+  INSYLUS_SERVER_VERSION   Version stamped into insylus-server (default: exact Git tag without leading v, else dev)
 
 Examples:
   # Default install
@@ -197,6 +198,24 @@ install_deps() {
     echo "Dependencies installed."
 }
 
+detect_server_version() {
+    if [[ -n "${INSYLUS_SERVER_VERSION:-}" ]]; then
+        echo "$INSYLUS_SERVER_VERSION"
+        return 0
+    fi
+
+    if command -v git &>/dev/null && git -C "$REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        local tag=""
+        tag="$(git -C "$REPO_ROOT" describe --tags --exact-match 2>/dev/null || true)"
+        if [[ -n "$tag" ]]; then
+            echo "${tag#v}"
+            return 0
+        fi
+    fi
+
+    echo "dev"
+}
+
 echo "=== Insylus Server Installer ==="
 echo ""
 
@@ -209,6 +228,8 @@ fi
 if [[ "$SKIP_BUILD" == "false" ]]; then
     echo "Building binaries..."
     mkdir -p "$REPO_ROOT/dist"
+    SERVER_VERSION="$(detect_server_version)"
+    echo "Server version: $SERVER_VERSION"
 
     # Download Go modules first
     echo "Downloading Go modules..."
@@ -217,7 +238,7 @@ if [[ "$SKIP_BUILD" == "false" ]]; then
         exit 1
     fi
 
-    if ! go build -o "$REPO_ROOT/dist/insylus-server" "$REPO_ROOT/cmd/insylus-server"; then
+    if ! go build -ldflags "-X insylus/internal/version.ServerVersion=$SERVER_VERSION" -o "$REPO_ROOT/dist/insylus-server" "$REPO_ROOT/cmd/insylus-server"; then
         echo "ERROR: Failed to build insylus-server" >&2
         exit 1
     fi
