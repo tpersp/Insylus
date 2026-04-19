@@ -35,7 +35,7 @@ func (Plugin) Register(host pluginhost.Host) error {
 			return err
 		}
 		rt := runtime{store: newStore(host), render: host.Web().Render}
-		host.Web().NavItem(pluginhost.NavItem{Label: "Jellyfin", Href: "/jellyfin", Order: 45})
+		host.Web().NavItem(pluginhost.NavItem{PluginID: "jellyfin", Label: "Jellyfin", Href: "/jellyfin", Order: 45})
 		host.Web().Templates(templateFS, "templates/*.html")
 		host.Web().HandleFunc("GET /jellyfin", rt.handleJellyfinPage)
 		host.Web().HandleFunc("POST /jellyfin/tokens", rt.handleJellyfinSetToken)

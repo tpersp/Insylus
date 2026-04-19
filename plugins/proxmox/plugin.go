@@ -47,7 +47,7 @@ func (Plugin) Register(host pluginhost.Host) error {
 			return err
 		}
 		rt := runtime{store: newStore(host), render: host.Web().Render}
-		host.Web().NavItem(pluginhost.NavItem{Label: "Proxmox", Href: "/proxmox", Order: 45})
+		host.Web().NavItem(pluginhost.NavItem{PluginID: "proxmox", Label: "Proxmox", Href: "/proxmox", Order: 45})
 		host.Web().Templates(templateFS, "templates/*.html")
 		host.Web().HandleFunc("GET /proxmox", rt.handleProxmoxPage)
 		host.Web().HandleFunc("POST /proxmox/tokens", rt.handleProxmoxSetToken)

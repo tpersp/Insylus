@@ -31,7 +31,7 @@ func (Plugin) Register(host pluginhost.Host) error {
 		if err != nil {
 			return err
 		}
-		host.Web().NavItem(pluginhost.NavItem{Label: "Agent Settings", Href: "/agent/settings", Order: 35})
+		host.Web().NavItem(pluginhost.NavItem{PluginID: "agent", Label: "Agent Settings", Href: "/agent/settings", Order: 35})
 		host.Web().Templates(templateFS, "templates/*.html")
 		host.Web().HandleFunc("GET /agent/settings", rt.handleAgentSettingsPage)
 		host.Web().HandleFunc("POST /agent/settings/auto-update", rt.handleUpdateAgentAutoUpdateDefault)

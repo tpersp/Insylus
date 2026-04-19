@@ -37,7 +37,7 @@ func (Plugin) Register(host pluginhost.Host) error {
 			targets:   host.Targets(),
 			render:    host.Web().Render,
 		}
-		host.Web().NavItem(pluginhost.NavItem{Label: "Dashboard", Href: "/", Order: 0})
+		host.Web().NavItem(pluginhost.NavItem{PluginID: "dashboard", Label: "Dashboard", Href: "/", Order: 0})
 		host.Web().Templates(templateFS, "templates/*.html")
 		host.Web().HandleFunc("GET /", rt.handlePage)
 	}

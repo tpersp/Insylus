@@ -170,9 +170,10 @@ type PluginInfo struct {
 }
 
 type NavItem struct {
-	Label string
-	Href  string
-	Order int
+	PluginID string
+	Label    string
+	Href     string
+	Order    int
 }
 
 type StaticMount struct {

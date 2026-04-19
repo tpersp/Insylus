@@ -40,9 +40,10 @@ func (Plugin) Register(host pluginhost.Host) error {
 		}
 		rt := runtime{store: newStore(host), render: host.Web().Render}
 		host.Web().NavItem(pluginhost.NavItem{
-			Label: "Docker",
-			Href:  "/docker",
-			Order: 55,
+			PluginID: "docker",
+			Label:    "Docker",
+			Href:     "/docker",
+			Order:    55,
 		})
 		host.Web().Templates(templateFS, "templates/*.html")
 		host.Web().Static("/plugin-assets/docker/", staticFS)

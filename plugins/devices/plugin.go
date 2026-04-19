@@ -44,7 +44,7 @@ func (Plugin) Register(host pluginhost.Host) error {
 			return err
 		}
 		rt := runtime{targets: host.Targets(), inventory: host.Data().Inventory(), managed: managedProvider(host), render: host.Web().Render}
-		host.Web().NavItem(pluginhost.NavItem{Label: "Devices", Href: "/devices", Order: 10})
+		host.Web().NavItem(pluginhost.NavItem{PluginID: "devices", Label: "Devices", Href: "/devices", Order: 10})
 		host.Web().Templates(templateFS, "templates/*.html")
 		host.Web().HandleFunc("GET /devices", rt.handleTargetsPage)
 		host.Web().HandleFunc("POST /devices", rt.handleCreateTarget)

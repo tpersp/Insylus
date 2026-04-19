@@ -58,10 +58,10 @@ If possible, disable managed access for the target in Insylus first, then let th
 
 If the agent is already removed, clean up manually.
 
-Set the managed user. New installs default to `insylusmgr` unless you configured a different managed account:
+Set the managed user. New installs default to `bob` unless you configured a different managed account:
 
 ```bash
-MANAGED_USER=insylusmgr
+MANAGED_USER=bob
 ```
 
 Remove Insylus sudoers files:

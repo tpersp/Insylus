@@ -19,6 +19,7 @@ type runtime struct {
 	store   store
 	client  *GitHubClient
 	version string
+	render  func(http.ResponseWriter, string, any)
 }
 
 func newRuntime(host pluginhost.Host) runtime {
@@ -26,6 +27,7 @@ func newRuntime(host pluginhost.Host) runtime {
 		store:   newStore(host),
 		client:  NewGitHubClient(),
 		version: version.AgentVersion,
+		render:  host.Web().Render,
 	}
 }
 

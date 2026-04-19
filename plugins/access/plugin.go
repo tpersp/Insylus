@@ -28,7 +28,7 @@ func (Plugin) Register(host pluginhost.Host) error {
 		return err
 	}
 	rt := runtime{store: newStore(host), managed: managedProvider(host), render: host.Web().Render}
-	host.Web().NavItem(pluginhost.NavItem{Label: "SSH Keys", Href: "/keys", Order: 50})
+	host.Web().NavItem(pluginhost.NavItem{PluginID: "access", Label: "SSH Keys", Href: "/keys", Order: 50})
 	host.Web().Templates(templateFS, "templates/*.html")
 	host.Web().HandleFunc("POST /devices/{id}/policy", rt.handleUpdatePolicy)
 	host.Web().HandleFunc("POST /devices/{id}/mode", rt.handleUpdateDeviceMode)

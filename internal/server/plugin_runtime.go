@@ -160,8 +160,8 @@ func pluginProfiles() []pluginhost.PluginProfile {
 		{Name: "docker", Description: "Docker control only", PluginIDs: []string{"dashboard", "help", "docker"}},
 		{Name: "proxmox", Description: "Proxmox control only", PluginIDs: []string{"dashboard", "help", "proxmox"}},
 		{Name: "media", Description: "Jellyfin media only", PluginIDs: []string{"dashboard", "help", "jellyfin"}},
-		{Name: "homelab", Description: "Inventory, agent, services, topology, wake, Docker, Proxmox, and Jellyfin", PluginIDs: []string{"dashboard", "help", "devices", "agent", "services", "topology", "wake", "docker", "proxmox", "jellyfin"}},
-		{Name: "managed-homelab", Description: "Homelab profile plus managed access", PluginIDs: []string{"dashboard", "help", "devices", "agent", "services", "topology", "wake", "docker", "proxmox", "jellyfin", "access"}},
+		{Name: "homelab", Description: "Inventory, agent, services, topology, wake, Docker, Proxmox, Jellyfin, and Update", PluginIDs: []string{"dashboard", "help", "devices", "agent", "services", "topology", "wake", "docker", "proxmox", "jellyfin", "update"}},
+		{Name: "managed-homelab", Description: "Homelab profile plus managed access", PluginIDs: []string{"dashboard", "help", "devices", "agent", "services", "topology", "wake", "docker", "proxmox", "jellyfin", "access", "update"}},
 	}
 }
 

@@ -8,7 +8,7 @@ import (
 const (
 	AgentCheckInInterval = 15 * time.Second
 	DeviceOnlineWindow   = 45 * time.Second
-	DefaultManagedUser   = "insylusmgr"
+	DefaultManagedUser   = "bob"
 )
 
 type AccessMode string

@@ -56,12 +56,14 @@ sudo env \
   INSYLUS_LISTEN_ADDR=:8080 \
   INSYLUS_APP_USER=insylus \
   INSYLUS_APP_GROUP=insylus \
-  INSYLUS_MANAGED_USER=insylus \
+  INSYLUS_MANAGED_USER=bob \
   INSYLUS_MANAGED_GROUPS=adm,systemd-journal \
   bash ./scripts/install-insylus-service.sh
 ```
 
-The controller service account is separate from the managed account that Insylus can create on enrolled devices. `INSYLUS_APP_USER` controls the local service account; `INSYLUS_MANAGED_USER` controls the remote managed-access account.
+Key distinction:
+- `INSYLUS_APP_USER` = local service account for running insylus-server on this controller
+- `INSYLUS_MANAGED_USER` = remote account created on enrolled devices for managed SSH access
 
 After installation, the remote managed user and audit groups can be changed from the Settings page. Those values are stored in the controller database and override the install-time defaults.
 

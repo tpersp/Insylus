@@ -306,7 +306,7 @@ The `info` view includes:
 - `managed_account_enabled`
   Indicates whether the managed account should be enabled.
 - `managed_user`
-  The Linux account name currently managed by the controller policy. New installs default to `insylusmgr` so the remote managed account is distinct from the controller service account.
+  The Linux account name currently managed by the controller policy. New installs default to `bob` so the remote managed account is clearly a regular user account.
 - `managed_groups`
   Linux groups granted in `audit` mode. Existing installs default to `adm` and `systemd-journal`; new/systemd installs can set `INSYLUS_MANAGED_GROUPS` before running the installer.
 - `device_mode`

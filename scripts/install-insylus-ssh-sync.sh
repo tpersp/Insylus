@@ -3,7 +3,7 @@ set -euo pipefail
 
 BIN="${INSYLUS_SERVER_BIN:-${INSYLUS_BIN_DIR:-/opt/insylus/bin}/insylus-server}"
 DB="${INSYLUS_DB_PATH:-${INSYLUS_DATA_DIR:-/var/lib/insylus}/insylus.db}"
-SSH_USER="${INSYLUS_MANAGED_USER:-insylusmgr}"
+SSH_USER="${INSYLUS_MANAGED_USER:-bob}"
 IDENTITY_FILE="${INSYLUS_SSH_IDENTITY_FILE:-/home/$SSH_USER/.ssh/id_ed25519}"
 SYSTEMD_DIR="${INSYLUS_SYSTEMD_DIR:-/etc/systemd/system}"
 SERVER_SERVICE_NAME="${INSYLUS_SERVICE_NAME:-insylus.service}"

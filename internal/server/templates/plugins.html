@@ -6,6 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Plugins</title>
   {{ template "head-assets" . }}
+  <style>
+    .restart-notice { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 12px 16px; margin-bottom: 20px; }
+    .restart-notice strong { color: #92400e; }
+    .restart-notice button { background: #f59e0b; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin-left: 10px; }
+    .restart-notice button:hover { background: #d97706; }
+    .inline-form { display: inline; }
+    .inline-form button { background: #6b7280; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+    .inline-form button:hover { background: #4b5563; }
+    .inline-form button:disabled { opacity: 0.6; cursor: not-allowed; }
+  </style>
 </head>
 <body>
   {{ template "header" . }}
@@ -17,6 +27,12 @@
         <h2>Controller Plugins</h2>
       </div>
     </div>
+
+    <div class="restart-notice" id="restart-notice" style="display:none">
+      <strong>Restart required:</strong> Plugin changes require a server restart to take effect.
+      <button onclick="restartService()">Restart Now</button>
+    </div>
+
     <div class="table-wrap">
       <table>
         <thead>
@@ -35,9 +51,9 @@
             <td><span class="muted">{{ range .Provides }}{{ . }} {{ end }}</span></td>
             <td>
               {{ if .Enabled }}
-              <form method="post" action="/api/plugins/{{ .ID }}/disable" class="inline-form"><button type="submit">Disable</button></form>
+              <button type="button" onclick="togglePlugin('{{ .ID }}', false, this)">Disable</button>
               {{ else }}
-              <form method="post" action="/api/plugins/{{ .ID }}/enable" class="inline-form"><button type="submit">Enable</button></form>
+              <button type="button" onclick="togglePlugin('{{ .ID }}', true, this)">Enable</button>
               {{ end }}
             </td>
           </tr>
@@ -59,13 +75,54 @@
           <tr>
             <td><strong>{{ .Name }}</strong><br><span class="muted">{{ .Description }}</span></td>
             <td><span class="muted">{{ range .PluginIDs }}{{ . }} {{ end }}</span></td>
-            <td><form method="post" action="/api/plugins/profiles/{{ .Name }}/apply" class="inline-form"><button type="submit">Apply</button></form></td>
+            <td><button type="button" onclick="applyProfile('{{ .Name }}', this)">Apply</button></td>
           </tr>
           {{ end }}
         </tbody>
       </table>
     </div>
   </section>
+
+  <script>
+    async function togglePlugin(id, enable, btn) {
+      btn.disabled = true;
+      const action = enable ? 'enable' : 'disable';
+      try {
+        const r = await fetch('/api/plugins/' + id + '/' + action, { method: 'POST' });
+        if (r.ok) {
+          document.getElementById('restart-notice').style.display = 'block';
+        } else {
+          alert('Failed to ' + action + ' plugin');
+        }
+      } catch(e) {
+        alert('Error: ' + e);
+      }
+      btn.disabled = false;
+    }
+
+    async function applyProfile(name, btn) {
+      btn.disabled = true;
+      try {
+        const r = await fetch('/api/plugins/profiles/' + name + '/apply', { method: 'POST' });
+        if (r.ok) {
+          document.getElementById('restart-notice').style.display = 'block';
+        } else {
+          alert('Failed to apply profile');
+        }
+      } catch(e) {
+        alert('Error: ' + e);
+      }
+      btn.disabled = false;
+    }
+
+    function restartService() {
+      if (confirm('Restart insylus.service now?')) {
+        fetch('/api/restart', { method: 'POST' })
+          .then(r => { if (r.ok) location.reload(); else alert('Restart failed'); })
+          .catch(() => alert('Restart failed'));
+      }
+    }
+  </script>
 </main>
 </body>
 </html>

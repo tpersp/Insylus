@@ -57,7 +57,7 @@ Reported IP list. First item is typically the primary LAN address.
 Whether the managed account should be enabled on the device.
 
 ### `managed_user`
-Linux account name currently managed by the controller policy. New installs default to `insylusmgr`; existing accounts are linked and missing accounts are created by the agent when access is enabled.
+Linux account name currently managed by the controller policy. New installs default to `bob`; existing accounts are linked and missing accounts are created by the agent when access is enabled.
 
 ### `managed_groups`
 Linux groups granted in `audit` mode. The default is `adm` and `systemd-journal`.

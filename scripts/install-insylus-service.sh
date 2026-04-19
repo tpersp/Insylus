@@ -3,7 +3,7 @@ set -euo pipefail
 
 APP_USER="${INSYLUS_APP_USER:-insylus}"
 APP_GROUP="${INSYLUS_APP_GROUP:-insylus}"
-MANAGED_USER="${INSYLUS_MANAGED_USER:-insylusmgr}"
+MANAGED_USER="${INSYLUS_MANAGED_USER:-bob}"
 MANAGED_GROUPS="${INSYLUS_MANAGED_GROUPS:-adm,systemd-journal}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -104,9 +104,24 @@ ReadWritePaths=$DATA_DIR
 WantedBy=multi-user.target
 EOF
 
+# Check if this is a fresh install or update
+WAS_RUNNING=false
+if systemctl is-active --quiet "$UNIT_NAME" 2>/dev/null; then
+    WAS_RUNNING=true
+fi
+
 systemctl daemon-reload
 systemctl enable --now "$UNIT_NAME"
-systemctl status --no-pager "$UNIT_NAME"
+
+if [[ "$WAS_RUNNING" == "true" ]]; then
+    echo ""
+    echo "Restarting existing service..."
+    systemctl restart "$UNIT_NAME"
+    echo "Service restarted."
+else
+    echo ""
+    echo "Service started."
+fi
 
 if [[ -x "$REPO_ROOT/scripts/install-insylus-ssh-sync.sh" ]]; then
   INSYLUS_BIN_DIR="$BIN_DIR" \
@@ -114,5 +129,40 @@ if [[ -x "$REPO_ROOT/scripts/install-insylus-ssh-sync.sh" ]]; then
     INSYLUS_SYSTEMD_DIR="$SYSTEMD_DIR" \
     INSYLUS_SERVICE_NAME="$UNIT_NAME" \
     INSYLUS_MANAGED_USER="$MANAGED_USER" \
-    "$REPO_ROOT/scripts/install-insylus-ssh-sync.sh"
+    "$REPO_ROOT/scripts/install-insylus-ssh-sync.sh" >/dev/null 2>&1
 fi
+
+systemctl status --no-pager "$UNIT_NAME" 2>/dev/null || true
+
+echo ""
+echo "=== Insylus Server ${WAS_RUNNING:+Updat}Installed Successfully ==="
+echo ""
+
+# Detect server IP for web UI URL
+detect_server_ip() {
+    local ip=""
+    # Try to get the default route IP (excludes docker, loopback, etc.)
+    if command -v ip &>/dev/null; then
+        ip=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K[\d.]+' | head -1)
+    fi
+    # Fallback to hostname -I and pick first non-loopback
+    if [[ -z "$ip" ]] && command -v hostname &>/dev/null; then
+        ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    fi
+    # Final fallback to localhost
+    if [[ -z "$ip" ]]; then
+        ip="localhost"
+    fi
+    echo "$ip"
+}
+
+SERVER_IP=$(detect_server_ip)
+
+echo "  Web UI:   http://$SERVER_IP$LISTEN_ADDR"
+echo "  CLI:      insylusctl devices"
+echo ""
+echo "  Service:  systemctl status insylus.service"
+echo "  Logs:     journalctl -u insylus.service -f"
+echo ""
+echo "  User data at $DATA_DIR is preserved and never modified."
+echo ""

@@ -1,0 +1,250 @@
+#!/usr/bin/env bash
+#
+# Insylus Server Installer
+# Usage: sudo bash install [--help] [--repo <path>] [--skip-build]
+#
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_SCRIPT="$SCRIPT_DIR/scripts/install-insylus-service.sh"
+
+usage() {
+    cat <<EOF
+Insylus Server Installer
+
+Usage: sudo bash install [options]
+
+Options:
+  --help          Show this help message
+  --repo <path>   Path to Insylus repository (default: $SCRIPT_DIR)
+  --skip-build    Skip binary build, use existing dist/ binaries
+
+Environment variables (optional overrides):
+  INSYLUS_INSTALL_ROOT     Installation directory (default: /opt/insylus)
+  INSYLUS_DATA_DIR         Data directory (default: /var/lib/insylus)
+  INSYLUS_LISTEN_ADDR      Listen address (default: :8080)
+  INSYLUS_APP_USER         Local service user for insylus-server (default: insylus)
+  INSYLUS_APP_GROUP        Local service group (default: insylus)
+  INSYLUS_MANAGED_USER     Remote managed user on enrolled devices (default: bob)
+  INSYLUS_MANAGED_GROUPS   Remote groups for managed user on devices (default: adm,systemd-journal)
+
+Examples:
+  # Default install
+  sudo bash install
+
+  # Install with custom paths
+  sudo env INSYLUS_INSTALL_ROOT=/srv/insylus INSYLUS_DATA_DIR=/data/insylus sudo bash install
+
+  # Use pre-built binaries
+  sudo bash install --skip-build
+EOF
+}
+
+SKIP_BUILD=false
+REPO_ROOT="$SCRIPT_DIR"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        --repo)
+            REPO_ROOT="$2"
+            shift 2
+            ;;
+        --skip-build)
+            SKIP_BUILD=true
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+INSTALL_SCRIPT="$REPO_ROOT/scripts/install-insylus-service.sh"
+
+if [[ ! -f "$INSTALL_SCRIPT" ]]; then
+    echo "ERROR: Install script not found at $INSTALL_SCRIPT" >&2
+    exit 1
+fi
+
+if [[ "$EUID" -ne 0 ]]; then
+    echo "ERROR: This script must be run as root (use sudo)" >&2
+    exit 1
+fi
+
+# Detect OS for package installation
+detect_os() {
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        echo "$ID"
+    elif command -v apt-get &>/dev/null; then
+        echo "debian"
+    elif command -v dnf &>/dev/null; then
+        echo "fedora"
+    elif command -v pacman &>/dev/null; then
+        echo "arch"
+    else
+        echo "unknown"
+    fi
+}
+
+# Install Go if not present
+install_go() {
+    if command -v go &>/dev/null; then
+        echo "Go already installed: $(go version)"
+        return 0
+    fi
+
+    echo "Installing Go..."
+
+    OS="$(detect_os)"
+    case "$OS" in
+        ubuntu|debian)
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -qq golang-go
+            ;;
+        fedora|rhel|centos)
+            dnf install -y golang
+            ;;
+        arch)
+            pacman -Sy --noconfirm go
+            ;;
+        *)
+            echo "ERROR: Cannot auto-install Go on this OS ($OS). Please install Go manually:" >&2
+            echo "  https://go.dev/doc/install" >&2
+            exit 1
+            ;;
+    esac
+
+    if command -v go &>/dev/null; then
+        echo "Go installed: $(go version)"
+    else
+        echo "ERROR: Failed to install Go" >&2
+        exit 1
+    fi
+}
+
+# Install build dependencies
+install_deps() {
+    echo "Checking build dependencies..."
+
+    local missing=()
+    local OS="$(detect_os)"
+
+    # Check for git
+    if ! command -v git &>/dev/null; then
+        missing+=("git")
+    fi
+
+    # Check for gcc (needed for CGO)
+    if ! command -v gcc &>/dev/null; then
+        missing+=("gcc")
+    fi
+
+    # Check for sqlite3 dev headers
+    case "$OS" in
+        ubuntu|debian)
+            if ! dpkg -s libsqlite3-dev &>/dev/null 2>&1; then
+                missing+=("libsqlite3-dev")
+            fi
+            ;;
+        fedora|rhel|centos)
+            if ! rpm -q sqlite-devel &>/dev/null 2>&1; then
+                missing+=("sqlite-devel")
+            fi
+            ;;
+        arch)
+            if ! pacman -Q sqlite &>/dev/null 2>&1; then
+                missing+=("sqlite")
+            fi
+            ;;
+    esac
+
+    if [[ ${#missing[@]} -eq 0 ]]; then
+        echo "All build dependencies satisfied."
+        return 0
+    fi
+
+    echo "Installing missing dependencies: ${missing[*]}"
+
+    case "$OS" in
+        ubuntu|debian)
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -qq "${missing[@]}"
+            ;;
+        fedora|rhel|centos)
+            dnf install -y "${missing[@]}"
+            ;;
+        arch)
+            pacman -Sy --noconfirm "${missing[@]}"
+            ;;
+        *)
+            echo "ERROR: Cannot auto-install dependencies on this OS. Please install manually:" >&2
+            echo "  - git" >&2
+            echo "  - gcc" >&2
+            echo "  - sqlite3 dev headers" >&2
+            exit 1
+            ;;
+    esac
+
+    echo "Dependencies installed."
+}
+
+echo "=== Insylus Server Installer ==="
+echo ""
+
+# Install Go if needed
+if [[ "$SKIP_BUILD" == "false" ]]; then
+    install_go
+    install_deps
+fi
+
+if [[ "$SKIP_BUILD" == "false" ]]; then
+    echo "Building binaries..."
+    mkdir -p "$REPO_ROOT/dist"
+
+    # Download Go modules first
+    echo "Downloading Go modules..."
+    if ! go mod download; then
+        echo "ERROR: Failed to download Go modules" >&2
+        exit 1
+    fi
+
+    if ! go build -o "$REPO_ROOT/dist/insylus-server" "$REPO_ROOT/cmd/insylus-server"; then
+        echo "ERROR: Failed to build insylus-server" >&2
+        exit 1
+    fi
+
+    if ! go build -o "$REPO_ROOT/dist/insylus-agent" "$REPO_ROOT/cmd/insylus-agent"; then
+        echo "ERROR: Failed to build insylus-agent" >&2
+        exit 1
+    fi
+
+    if ! go build -o "$REPO_ROOT/dist/insylusctl" "$REPO_ROOT/cmd/insylusctl"; then
+        echo "ERROR: Failed to build insylusctl" >&2
+        exit 1
+    fi
+
+    # Cross-compile agent for other architectures
+    GOOS=linux GOARCH=amd64 go build -o "$REPO_ROOT/dist/insylus-agent-linux-amd64" "$REPO_ROOT/cmd/insylus-agent" 2>/dev/null || true
+    GOOS=linux GOARCH=arm64 go build -o "$REPO_ROOT/dist/insylus-agent-linux-arm64" "$REPO_ROOT/cmd/insylus-agent" 2>/dev/null || true
+    GOOS=linux GOARCH=arm go build -o "$REPO_ROOT/dist/insylus-agent-linux-armv7" "$REPO_ROOT/cmd/insylus-agent" 2>/dev/null || true
+
+    echo "Binaries built successfully."
+else
+    echo "Skipping build (using existing dist/ binaries)..."
+fi
+
+echo ""
+echo "Running service installer..."
+echo ""
+
+# Pass through relevant environment variables to the install script
+exec bash "$INSTALL_SCRIPT"

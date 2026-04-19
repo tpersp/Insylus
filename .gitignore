@@ -1,1 +1,4 @@
 .claude/
+dist/
+*.db
+*.log

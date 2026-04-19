@@ -48,8 +48,8 @@ func (Plugin) Register(host pluginhost.Host) error {
 			inventory: host.Data().Inventory(),
 			render:    host.Web().Render,
 		}
-		host.Web().NavItem(pluginhost.NavItem{Label: "Services", Href: "/services", Order: 20})
-		host.Web().NavItem(pluginhost.NavItem{Label: "History", Href: "/history", Order: 30})
+		host.Web().NavItem(pluginhost.NavItem{PluginID: "services", Label: "Services", Href: "/services", Order: 20})
+		host.Web().NavItem(pluginhost.NavItem{PluginID: "services", Label: "History", Href: "/history", Order: 30})
 		host.Web().Templates(templateFS, "templates/*.html")
 		host.Web().HandleFunc("GET /services", rt.handleServicesPage)
 		host.Web().HandleFunc("POST /services/prune-missing", rt.handlePruneMissingServices)

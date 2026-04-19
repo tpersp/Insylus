@@ -167,8 +167,19 @@ func (h serverSecretHost) Decrypt(ciphertext string) (string, error) {
 
 func (a *App) pluginNavItems() []pluginhost.NavItem {
 	items := append([]pluginhost.NavItem(nil), a.navItems...)
-	pluginhost.SortNav(items)
-	return items
+	// Filter to only include nav items from enabled plugins
+	enabled := make(map[string]bool)
+	for _, m := range a.plugins.Available() {
+		enabled[m.ID] = m.Enabled
+	}
+	filtered := items[:0]
+	for _, item := range items {
+		if item.PluginID == "" || enabled[item.PluginID] {
+			filtered = append(filtered, item)
+		}
+	}
+	pluginhost.SortNav(filtered)
+	return filtered
 }
 
 func (a *App) parseTemplates(funcs template.FuncMap) error {

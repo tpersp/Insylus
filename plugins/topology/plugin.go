@@ -31,7 +31,7 @@ func (Plugin) Register(host pluginhost.Host) error {
 		return err
 	}
 	rt := runtime{db: host.DB(), targets: host.Targets(), render: host.Web().Render}
-	host.Web().NavItem(pluginhost.NavItem{Label: "Topology", Href: "/topology", Order: 40})
+	host.Web().NavItem(pluginhost.NavItem{PluginID: "topology", Label: "Topology", Href: "/topology", Order: 40})
 	host.Web().Templates(templateFS, "templates/*.html")
 	host.Web().Static("/plugin-assets/topology/", staticFS)
 	host.Web().HandleFunc("GET /topology", rt.handlePage)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os/exec"
 	"strings"
 
 	"insylus/internal/pluginhost"
@@ -20,6 +21,7 @@ func (a *App) registerCoreRoutes() {
 		routeDef{Pattern: "POST /api/plugins/{id}/disable", Handler: a.handlePluginDisable},
 		routeDef{Pattern: "POST /api/plugins/{id}/purge", Handler: a.handlePluginPurge},
 		routeDef{Pattern: "POST /api/plugins/profiles/{name}/apply", Handler: a.handlePluginProfileApply},
+		routeDef{Pattern: "POST /api/restart", Handler: a.handleRestart},
 		routeDef{Pattern: "GET /api/targets", Handler: a.handleTargetsList},
 		routeDef{Pattern: "GET /api/targets/find", Handler: a.handleTargetsFind},
 		routeDef{Pattern: "GET /api/targets/{id}", Handler: a.handleTargetGet},
@@ -74,6 +76,18 @@ func (a *App) handlePluginProfileApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.writeJSON(w, http.StatusOK, map[string]string{"status": "applied", "restart": "required"})
+}
+
+func (a *App) handleRestart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, map[string]string{"status": "restarting"})
+	go func() {
+		cmd := exec.Command("systemctl", "restart", "insylus.service")
+		cmd.Run()
+	}()
 }
 
 func (a *App) handleTargetsList(w http.ResponseWriter, r *http.Request) {

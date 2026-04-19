@@ -3,7 +3,6 @@ package update
 import (
 	"embed"
 	"io/fs"
-	"net/http"
 
 	"insylus/internal/pluginhost"
 )
@@ -37,9 +36,10 @@ func (Plugin) Register(host pluginhost.Host) error {
 		}
 		rt := newRuntime(host)
 		host.Web().NavItem(pluginhost.NavItem{
-			Label: "Update",
-			Href:  "/update",
-			Order: 60,
+			PluginID: "update",
+			Label:    "Update",
+			Href:     "/update",
+			Order:    60,
 		})
 		host.Web().Templates(templateFS, "templates/*.html")
 		host.Web().Static("/plugin-assets/update/", staticFS)
