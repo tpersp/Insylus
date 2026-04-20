@@ -310,7 +310,7 @@ The `info` view includes:
 - `managed_user`
   The Linux account name currently managed by the controller policy. New installs default to `bob` so the remote managed account is clearly a regular user account.
 - `managed_groups`
-  Linux groups granted in `audit` mode. Existing installs default to `adm` and `systemd-journal`; new/systemd installs can set `INSYLUS_MANAGED_GROUPS` before running the installer.
+  Internal policy groups derived from `access_mode`. Operators choose the access level; Insylus maps it to the needed Linux groups, such as audit log groups or `docker`.
 - `device_mode`
   Either `inventory-only` or `access-managed`. In `inventory-only`, Insylus does not modify users, SSH keys, sudoers, or groups.
 - `access_mode`

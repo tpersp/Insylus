@@ -62,9 +62,8 @@ func (a *App) handleAccessSettingsManagedAccount(w http.ResponseWriter, r *http.
 		return
 	}
 	cfg := shared.ManagedAccountConfig{
-		ManagedUser:   r.FormValue("managed_user"),
-		ManagedGroups: strings.Split(r.FormValue("managed_groups"), ","),
-		AccessMode:    shared.AccessMode(r.FormValue("access_level")),
+		ManagedUser: r.FormValue("managed_user"),
+		AccessMode:  shared.AccessMode(r.FormValue("access_level")),
 	}
 	if err := a.store.SetManagedAccountConfig(r.Context(), cfg); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

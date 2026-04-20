@@ -62,9 +62,8 @@ func (rt runtime) handleUpdateManagedAccount(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	cfg := shared.ManagedAccountConfig{
-		ManagedUser:   r.FormValue("managed_user"),
-		ManagedGroups: strings.Split(r.FormValue("managed_groups"), ","),
-		AccessMode:    shared.AccessMode(r.FormValue("access_level")),
+		ManagedUser: r.FormValue("managed_user"),
+		AccessMode:  shared.AccessMode(r.FormValue("access_level")),
 	}
 	if err := rt.store.setManagedAccountConfig(r.Context(), cfg); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -154,6 +153,9 @@ func (rt runtime) handleKeysAPI(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if keys == nil {
+		keys = []shared.SSHKey{}
 	}
 	writeJSON(w, http.StatusOK, keys)
 }

@@ -96,7 +96,7 @@ func TestManagedAccountConfigUsesFallbackAndPersistedSettings(t *testing.T) {
 
 	if err := store.SetManagedAccountConfig(context.Background(), shared.ManagedAccountConfig{
 		ManagedUser: "remote",
-		AccessMode: shared.AccessModeDocker,
+		AccessMode:  shared.AccessModeDocker,
 	}); err != nil {
 		t.Fatalf("SetManagedAccountConfig: %v", err)
 	}
@@ -106,6 +106,13 @@ func TestManagedAccountConfigUsesFallbackAndPersistedSettings(t *testing.T) {
 	}
 	if cfg.ManagedUser != "remote" || cfg.AccessMode != shared.AccessModeDocker {
 		t.Fatalf("unexpected persisted config: %+v", cfg)
+	}
+	if hasString(cfg.ManagedGroups, "docker") {
+		t.Fatalf("managed account config should persist base audit groups, got %+v", cfg.ManagedGroups)
+	}
+	groups := managedGroupsForAccessMode(shared.AccessModeDocker, cfg.ManagedGroups)
+	if !hasString(groups, "docker") || !hasString(groups, "adm") {
+		t.Fatalf("docker access groups = %+v, want audit groups plus docker", groups)
 	}
 }
 

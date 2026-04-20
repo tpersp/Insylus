@@ -60,12 +60,14 @@ Whether the managed account should be enabled on the device.
 Linux account name currently managed by the controller policy. New installs default to `bob`; existing accounts are linked and missing accounts are created by the agent when access is enabled.
 
 ### `managed_groups`
-Linux groups granted in `audit` mode. The default is `adm` and `systemd-journal`.
+Internal policy groups derived from `access_mode`; operators choose an access level instead of choosing Linux groups directly.
 
 ### `access_mode`
 - `disabled` — managed account is locked or unavailable.
-- `audit` — SSH works; no passwordless sudo.
-- `sudo` — SSH works with passwordless sudo.
+- `audit` — SSH works with read-only audit/log access.
+- `docker` — audit access plus Docker group access.
+- `sudo_prompted` — sudo requires a password prompt.
+- `sudo_passwordless` — sudo does not require a password prompt.
 
 ### `ssh_alias`
 Preferred SSH alias for the controller host. Use: `ssh <ssh_alias>`. Empty when `device_mode=inventory-only` or `access_mode=disabled`.

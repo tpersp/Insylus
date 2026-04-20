@@ -81,14 +81,17 @@
       const state = document.getElementById('access-policy-state');
       Promise.all([
         fetch('/api/devices/' + encodeURIComponent(deviceID) + '?view=info').then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch('/api/access/keys').then(r => r.ok ? r.json() : null).catch(() => null)
-      ]).then(([device, keys]) => {
+        fetch('/api/access/keys').then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch('/api/plugins').then(r => r.ok ? r.json() : null).catch(() => null)
+      ]).then(([device, keys, plugins]) => {
         if (!device || !device.access) {
           state.textContent = 'Unavailable';
           body.textContent = 'Access controls are unavailable for this device.';
           return;
         }
         const access = device.access;
+        const accessPlugin = (plugins || []).find(p => p.id === 'access');
+        const accessEnabled = accessPlugin ? accessPlugin.enabled : keys !== null;
         state.textContent = access.device_mode === 'access-managed' ? 'Access managed' : 'Inventory only';
         state.className = 'pill ' + (access.device_mode === 'access-managed' ? 'pill-ok' : 'pill-muted');
         const keyOptions = ['<option value="">none</option>'].concat((keys || []).map(k => {
@@ -106,7 +109,7 @@
           '<p><span>Policy revision</span>' + escapeHTML(access.applied_revision || 0) + ' / ' + escapeHTML(access.policy_revision || 0) + '</p>' +
           '<p><span>Last error</span>' + escapeHTML(access.error_message || 'none') + '</p>' +
           '</div>' +
-          (keys === null ? '<p class="muted">Enable the Access plugin to edit managed user policy from this page.</p>' :
+          (!accessEnabled ? '<p class="muted">Enable the Access plugin to edit managed user policy from this page.</p>' :
           '<details class="edit-drawer"><summary>Edit device mode</summary>' +
           '<form method="post" action="/devices/' + encodeURIComponent(deviceID) + '/mode" class="stack compact-form">' +
           '<label>Mode <select name="device_mode">' +
@@ -126,6 +129,7 @@
             option('sudo_passwordless', 'sudo (passwordless) - Full admin access', access.access_mode) +
             '</select></label>' +
             '<label>SSH key <select name="ssh_key_id">' + keyOptions + '</select></label>' +
+            (keys === null ? '<p class="muted">SSH key list is unavailable; saving with none leaves this device without an assigned key.</p>' : '') +
             '<button type="submit">Save policy</button>' +
             '</form></details>'
           ) : '<p class="muted">Switch this device to access-managed mode before editing managed user access.</p>'));

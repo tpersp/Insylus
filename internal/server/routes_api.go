@@ -87,10 +87,10 @@ func (a *App) withManagedAccountPolicy(ctx context.Context, policy shared.AgentP
 	}
 	user := cfg.ManagedUser
 	policy.ManagedUser = user
-	policy.ManagedGroups = cfg.ManagedGroups
 	if policy.AccessMode == "" || policy.DeviceMode == shared.DeviceModeInventoryOnly {
 		policy.AccessMode = cfg.AccessMode
 	}
+	policy.ManagedGroups = managedGroupsForAccessMode(policy.AccessMode, cfg.ManagedGroups)
 	policy.SudoersPath = "/etc/sudoers.d/insylus-" + user
 	policy.AuditReadmePath = "/etc/sudoers.d/insylus-" + user + "-audit-readme"
 	policy.AuthorizedKeysPath = "/home/" + user + "/.ssh/authorized_keys"
@@ -148,6 +148,49 @@ func normalizedManagedGroups(groups []string) []string {
 
 func defaultManagedGroups() []string {
 	return []string{"adm", "systemd-journal"}
+}
+
+func managedGroupsForAccessMode(mode shared.AccessMode, auditGroups []string) []string {
+	base := auditBaseGroups(auditGroups)
+	if len(base) == 0 {
+		base = defaultManagedGroups()
+	}
+	switch mode {
+	case shared.AccessModeDocker:
+		return appendUniqueGroup(base, "docker")
+	case shared.AccessModeAudit, shared.AccessModeSudoPrompted, shared.AccessModeSudoPasswordless:
+		return base
+	default:
+		return nil
+	}
+}
+
+func auditBaseGroups(groups []string) []string {
+	out := normalizedManagedGroups(groups)
+	filtered := out[:0]
+	for _, group := range out {
+		switch strings.ToLower(strings.TrimSpace(group)) {
+		case "docker":
+			continue
+		default:
+			filtered = append(filtered, group)
+		}
+	}
+	return filtered
+}
+
+func appendUniqueGroup(groups []string, group string) []string {
+	out := append([]string(nil), groups...)
+	key := strings.ToLower(strings.TrimSpace(group))
+	if key == "" {
+		return out
+	}
+	for _, existing := range out {
+		if strings.ToLower(strings.TrimSpace(existing)) == key {
+			return out
+		}
+	}
+	return append(out, strings.TrimSpace(group))
 }
 
 func (a *App) handleAgentUpdateStatus(w http.ResponseWriter, r *http.Request) {

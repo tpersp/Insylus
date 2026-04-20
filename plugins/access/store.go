@@ -171,14 +171,15 @@ func (s store) setManagedAccountConfig(ctx context.Context, cfg shared.ManagedAc
 		return fmt.Errorf("managed user is required")
 	}
 	cfg.ManagedGroups = splitManagedGroups(strings.Join(cfg.ManagedGroups, ","))
-	if len(cfg.ManagedGroups) == 0 {
-		return fmt.Errorf("at least one managed group is required")
-	}
 	if cfg.AccessMode == "" {
 		cfg.AccessMode = shared.AccessModeAudit
 	}
 	if cfg.AccessMode != shared.AccessModeAudit && cfg.AccessMode != shared.AccessModeDocker && cfg.AccessMode != shared.AccessModeSudoPrompted && cfg.AccessMode != shared.AccessModeSudoPasswordless {
 		return fmt.Errorf("invalid access mode: %s", cfg.AccessMode)
+	}
+	cfg.ManagedGroups = auditBaseGroups(cfg.ManagedGroups)
+	if len(cfg.ManagedGroups) == 0 {
+		cfg.ManagedGroups = []string{"adm", "systemd-journal"}
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	if _, err := s.db.ExecContext(ctx, `
@@ -306,4 +307,16 @@ func splitManagedGroups(raw string) []string {
 		groups = append(groups, group)
 	}
 	return groups
+}
+
+func auditBaseGroups(groups []string) []string {
+	out := splitManagedGroups(strings.Join(groups, ","))
+	filtered := out[:0]
+	for _, group := range out {
+		if strings.EqualFold(strings.TrimSpace(group), "docker") {
+			continue
+		}
+		filtered = append(filtered, group)
+	}
+	return filtered
 }

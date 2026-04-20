@@ -25,10 +25,6 @@
         <label>Managed user
           <input type="text" name="managed_user" value="{{ .ManagedAccount.ManagedUser }}" placeholder="remote-account" required>
         </label>
-        <label>Managed groups
-          <input type="text" name="managed_groups" value="{{ .ManagedGroupsText }}" placeholder="adm,systemd-journal">
-          <span class="subtle">Comma-separated groups used for audit-style access.</span>
-        </label>
         <label>Access level
           <select name="access_level">
             <option value="audit" {{ if eq .ManagedAccount.AccessMode "audit" }}selected{{ end }}>audit - Read system logs</option>
@@ -54,6 +50,7 @@
         <p><span class="label">Controller service user:</span> <strong>insylus</strong></p>
         <p><span class="label">Default remote managed user:</span> <strong>{{ .ManagedAccount.ManagedUser }}</strong></p>
         <p><span class="label">Default access mode:</span> <strong>{{ .ManagedAccount.AccessMode }}</strong></p>
+        <p><span class="label">Access groups:</span> <strong>derived from access level</strong></p>
         <p><span class="label">Existing account:</span> <strong>linked</strong></p>
         <p><span class="label">Missing account:</span> <strong>created by agent</strong></p>
         <p><span class="label">Privilege boundary:</span> <strong>target agent applies changes</strong></p>
