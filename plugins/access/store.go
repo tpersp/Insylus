@@ -144,15 +144,23 @@ func (s store) managedAccountConfig(ctx context.Context) (shared.ManagedAccountC
 	if err != nil {
 		return shared.ManagedAccountConfig{}, err
 	}
+	accessModeRaw, err := s.appSetting(ctx, "managed_access_mode")
+	if err != nil {
+		return shared.ManagedAccountConfig{}, err
+	}
 	cfg := shared.ManagedAccountConfig{
 		ManagedUser:   strings.TrimSpace(user),
 		ManagedGroups: splitManagedGroups(groupsRaw),
+		AccessMode:    shared.AccessMode(accessModeRaw),
 	}
 	if cfg.ManagedUser == "" {
 		cfg.ManagedUser = shared.DefaultManagedUser
 	}
 	if len(cfg.ManagedGroups) == 0 {
 		cfg.ManagedGroups = []string{"adm", "systemd-journal"}
+	}
+	if cfg.AccessMode == "" {
+		cfg.AccessMode = shared.AccessModeAudit
 	}
 	return cfg, nil
 }
@@ -166,6 +174,12 @@ func (s store) setManagedAccountConfig(ctx context.Context, cfg shared.ManagedAc
 	if len(cfg.ManagedGroups) == 0 {
 		return fmt.Errorf("at least one managed group is required")
 	}
+	if cfg.AccessMode == "" {
+		cfg.AccessMode = shared.AccessModeAudit
+	}
+	if cfg.AccessMode != shared.AccessModeAudit && cfg.AccessMode != shared.AccessModeDocker && cfg.AccessMode != shared.AccessModeSudoPrompted && cfg.AccessMode != shared.AccessModeSudoPasswordless {
+		return fmt.Errorf("invalid access mode: %s", cfg.AccessMode)
+	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	if _, err := s.db.ExecContext(ctx, `
 		insert into app_settings (key, value, updated_at)
@@ -173,10 +187,16 @@ func (s store) setManagedAccountConfig(ctx context.Context, cfg shared.ManagedAc
 		on conflict(key) do update set value = excluded.value, updated_at = excluded.updated_at`, cfg.ManagedUser, now); err != nil {
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, `
+	if _, err := s.db.ExecContext(ctx, `
 		insert into app_settings (key, value, updated_at)
 		values ('managed_groups', ?, ?)
-		on conflict(key) do update set value = excluded.value, updated_at = excluded.updated_at`, strings.Join(cfg.ManagedGroups, ","), now)
+		on conflict(key) do update set value = excluded.value, updated_at = excluded.updated_at`, strings.Join(cfg.ManagedGroups, ","), now); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `
+		insert into app_settings (key, value, updated_at)
+		values ('managed_access_mode', ?, ?)
+		on conflict(key) do update set value = excluded.value, updated_at = excluded.updated_at`, string(cfg.AccessMode), now)
 	return err
 }
 

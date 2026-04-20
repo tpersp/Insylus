@@ -20,21 +20,24 @@ func (Plugin) ID() string { return "access" }
 func (Plugin) Name() string { return "Access" }
 
 func (Plugin) Register(host pluginhost.Host) error {
-	if !host.Web().Enabled() {
-		return nil
+	if host.Web().Enabled() {
+		templateFS, err := fs.Sub(templateFiles, ".")
+		if err != nil {
+			return err
+		}
+		rt := runtime{store: newStore(host), managed: managedProvider(host), render: host.Web().Render}
+		host.Web().NavItem(pluginhost.NavItem{PluginID: "access", Label: "SSH Keys", Href: "/keys", Order: 50})
+		host.Web().Templates(templateFS, "templates/*.html")
+		host.Web().HandleFunc("POST /devices/{id}/policy", rt.handleUpdatePolicy)
+		host.Web().HandleFunc("POST /devices/{id}/mode", rt.handleUpdateDeviceMode)
+		host.Web().HandleFunc("POST /devices/{id}/agent-auto-update", rt.handleUpdateDeviceAgentAutoUpdate)
+		host.Web().HandleFunc("GET /keys", rt.handleKeysPage)
+		host.Web().HandleFunc("POST /keys", rt.handleCreateKey)
 	}
-	templateFS, err := fs.Sub(templateFiles, ".")
-	if err != nil {
-		return err
+	if host.API().Enabled() {
+		rt := runtime{store: newStore(host), managed: managedProvider(host)}
+		host.API().HandleFunc("GET /api/access/keys", rt.handleKeysAPI)
 	}
-	rt := runtime{store: newStore(host), managed: managedProvider(host), render: host.Web().Render}
-	host.Web().NavItem(pluginhost.NavItem{PluginID: "access", Label: "SSH Keys", Href: "/keys", Order: 50})
-	host.Web().Templates(templateFS, "templates/*.html")
-	host.Web().HandleFunc("POST /devices/{id}/policy", rt.handleUpdatePolicy)
-	host.Web().HandleFunc("POST /devices/{id}/mode", rt.handleUpdateDeviceMode)
-	host.Web().HandleFunc("POST /devices/{id}/agent-auto-update", rt.handleUpdateDeviceAgentAutoUpdate)
-	host.Web().HandleFunc("GET /keys", rt.handleKeysPage)
-	host.Web().HandleFunc("POST /keys", rt.handleCreateKey)
 	return nil
 }
 

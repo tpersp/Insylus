@@ -55,6 +55,7 @@
               {{ else }}
               <button type="button" onclick="togglePlugin('{{ .ID }}', true, this)">Enable</button>
               {{ end }}
+              <button type="button" onclick="purgePlugin('{{ .ID }}', this)">Purge</button>
             </td>
           </tr>
           {{ end }}
@@ -113,6 +114,22 @@
           document.getElementById('restart-notice').style.display = 'block';
         } else {
           alert('Failed to apply profile');
+        }
+      } catch(e) {
+        alert('Error: ' + e);
+      }
+      btn.disabled = false;
+    }
+
+    async function purgePlugin(id, btn) {
+      if (!confirm('Purge stored data for plugin "' + id + '"?')) return;
+      btn.disabled = true;
+      try {
+        const r = await fetch('/api/plugins/' + id + '/purge', { method: 'POST' });
+        if (r.ok) {
+          location.reload();
+        } else {
+          alert('Failed to purge plugin');
         }
       } catch(e) {
         alert('Error: ' + e);

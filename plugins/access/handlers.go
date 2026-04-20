@@ -1,6 +1,7 @@
 package access
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -63,6 +64,7 @@ func (rt runtime) handleUpdateManagedAccount(w http.ResponseWriter, r *http.Requ
 	cfg := shared.ManagedAccountConfig{
 		ManagedUser:   r.FormValue("managed_user"),
 		ManagedGroups: strings.Split(r.FormValue("managed_groups"), ","),
+		AccessMode:    shared.AccessMode(r.FormValue("access_level")),
 	}
 	if err := rt.store.setManagedAccountConfig(r.Context(), cfg); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -93,8 +95,10 @@ func (rt runtime) handleUpdatePolicy(w http.ResponseWriter, r *http.Request) {
 	mode := shared.AccessMode(r.FormValue("access_mode"))
 	if !enabled {
 		mode = shared.AccessModeDisabled
+	} else if mode == "" || mode == shared.AccessModeDisabled {
+		mode = shared.AccessModeAudit
 	}
-	if mode != shared.AccessModeDisabled && mode != shared.AccessModeAudit && mode != shared.AccessModeSudoPrompted && mode != shared.AccessModeSudoPasswordless {
+	if mode != shared.AccessModeDisabled && mode != shared.AccessModeAudit && mode != shared.AccessModeDocker && mode != shared.AccessModeSudoPrompted && mode != shared.AccessModeSudoPasswordless {
 		http.Error(w, "invalid access mode", http.StatusBadRequest)
 		return
 	}
@@ -145,6 +149,15 @@ func (rt runtime) handleKeysPage(w http.ResponseWriter, r *http.Request) {
 	rt.render(w, "keys.html", keysData{Keys: keys})
 }
 
+func (rt runtime) handleKeysAPI(w http.ResponseWriter, r *http.Request) {
+	keys, err := rt.store.listSSHKeys(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, keys)
+}
+
 func (rt runtime) handleCreateKey(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -179,4 +192,10 @@ func accessSettingsPath(r *http.Request) string {
 		return "/access/settings"
 	}
 	return "/settings"
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
 }
