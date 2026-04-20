@@ -49,6 +49,7 @@ func (Plugin) Register(host pluginhost.Host) error {
 		host.Web().HandleFunc("GET /devices", rt.handleTargetsPage)
 		host.Web().HandleFunc("POST /devices", rt.handleCreateTarget)
 		host.Web().HandleFunc("GET /devices/{id}", rt.handleTargetPage)
+		host.Web().HandleFunc("POST /devices/{id}", rt.handleUpdateTarget)
 		host.Web().HandleFunc("POST /devices/{id}/note", rt.handleUpdateTargetNote)
 		host.Web().HandleFunc("POST /devices/{id}/delete", rt.handleDeleteTarget)
 	}

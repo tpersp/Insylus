@@ -30,7 +30,23 @@
           <p><span>SSH host</span>{{ if .Target.SSHHost }}<code>{{ .Target.SSHHost }}</code>{{ else }}<span class="muted">none</span>{{ end }}</p>
           <p><span>SSH user</span>{{ if .Target.SSHUser }}<code>{{ .Target.SSHUser }}</code>{{ else }}<span class="muted">none</span>{{ end }}</p>
           <p><span>IPs</span><span>{{ range .Target.IPs }}<code>{{ . }}</code> {{ else }}none{{ end }}</span></p>
+          <p><span>Tags</span><span>{{ range .Target.Tags }}<span class="pill">{{ . }}</span> {{ else }}none{{ end }}</span></p>
         </div>
+        <details class="edit-drawer">
+          <summary>Edit connection</summary>
+          <form method="post" action="/devices/{{ .Target.ID }}" class="settings-form">
+            <label>Name <input type="text" name="name" value="{{ .Target.Name }}" required></label>
+            <label>Kind <input type="text" name="kind" value="{{ .Target.Kind }}" placeholder="linux-host"></label>
+            <label>Hostname <input type="text" name="hostname" value="{{ .Target.Hostname }}" placeholder="atlas.local"></label>
+            <label>IPs <input type="text" name="ips" value="{{ range $i, $ip := .Target.IPs }}{{ if $i }}, {{ end }}{{ $ip }}{{ end }}" placeholder="10.0.0.20, 10.0.0.21"></label>
+            <label>API URL <input type="url" name="api_url" value="{{ .Target.APIURL }}" placeholder="https://host:port"></label>
+            <label>SSH host <input type="text" name="ssh_host" value="{{ .Target.SSHHost }}" placeholder="ssh alias, hostname, or IP"></label>
+            <label>SSH user <input type="text" name="ssh_user" value="{{ .Target.SSHUser }}" placeholder="operator"></label>
+            <label>Tags <input type="text" name="tags" value="{{ range $i, $tag := .Target.Tags }}{{ if $i }}, {{ end }}{{ $tag }}{{ end }}" placeholder="lab, media, rack-1"></label>
+            <label>Note <textarea name="note" rows="4">{{ .Target.Note }}</textarea></label>
+            <button type="submit">Save device</button>
+          </form>
+        </details>
       </article>
       <article class="panel">
         <div class="section-heading">
@@ -45,7 +61,83 @@
         </form>
       </article>
     </section>
+    <section class="panel" id="access-policy-panel" data-device-id="{{ .Target.ID }}">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Access</p>
+          <h2>Managed User Policy</h2>
+        </div>
+        <span class="pill pill-muted" id="access-policy-state">Loading</span>
+      </div>
+      <div id="access-policy-body" class="muted">Checking access plugin status...</div>
+    </section>
   </main>
+  <script>
+    (function() {
+      const panel = document.getElementById('access-policy-panel');
+      if (!panel) return;
+      const deviceID = panel.dataset.deviceId;
+      const body = document.getElementById('access-policy-body');
+      const state = document.getElementById('access-policy-state');
+      Promise.all([
+        fetch('/api/devices/' + encodeURIComponent(deviceID) + '?view=info').then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch('/api/access/keys').then(r => r.ok ? r.json() : null).catch(() => null)
+      ]).then(([device, keys]) => {
+        if (!device || !device.access) {
+          state.textContent = 'Unavailable';
+          body.textContent = 'Access controls are unavailable for this device.';
+          return;
+        }
+        const access = device.access;
+        state.textContent = access.device_mode === 'access-managed' ? 'Access managed' : 'Inventory only';
+        state.className = 'pill ' + (access.device_mode === 'access-managed' ? 'pill-ok' : 'pill-muted');
+        const keyOptions = ['<option value="">none</option>'].concat((keys || []).map(k => {
+          const fingerprint = k.Fingerprint || k.fingerprint || '';
+          const label = escapeHTML((k.Name || k.name || 'key') + ' (' + fingerprint + ')');
+          const selected = fingerprint && fingerprint === access.assigned_fingerprint ? ' selected' : '';
+          return '<option value="' + escapeHTML(k.ID || k.id) + '"' + selected + '>' + label + '</option>';
+        })).join('');
+        body.innerHTML =
+          '<div class="facts">' +
+          '<p><span>Device mode</span><strong>' + escapeHTML(access.device_mode || 'unknown') + '</strong></p>' +
+          '<p><span>Access mode</span><strong>' + escapeHTML(access.access_mode || 'disabled') + '</strong></p>' +
+          '<p><span>Managed user</span><strong>' + escapeHTML(access.managed_user || '') + '</strong></p>' +
+          '<p><span>Assigned key</span>' + escapeHTML(access.assigned_key_name || 'none') + '</p>' +
+          '<p><span>Policy revision</span>' + escapeHTML(access.applied_revision || 0) + ' / ' + escapeHTML(access.policy_revision || 0) + '</p>' +
+          '<p><span>Last error</span>' + escapeHTML(access.error_message || 'none') + '</p>' +
+          '</div>' +
+          (keys === null ? '<p class="muted">Enable the Access plugin to edit managed user policy from this page.</p>' :
+          '<details class="edit-drawer"><summary>Edit device mode</summary>' +
+          '<form method="post" action="/devices/' + encodeURIComponent(deviceID) + '/mode" class="stack compact-form">' +
+          '<label>Mode <select name="device_mode">' +
+          option('inventory-only', 'Inventory only', access.device_mode) +
+          option('access-managed', 'Access managed', access.device_mode) +
+          '</select></label>' +
+          '<button type="submit">Save device mode</button>' +
+          '</form></details>' +
+          (access.device_mode === 'access-managed' ? (
+            '<details class="edit-drawer"><summary>Edit access policy</summary>' +
+            '<form method="post" action="/devices/' + encodeURIComponent(deviceID) + '/policy" class="stack compact-form">' +
+            '<label><input type="checkbox" name="managed_account_enabled" ' + (access.managed_account_enabled ? 'checked' : '') + '> Link or create managed user <code>' + escapeHTML(access.managed_user || '') + '</code></label>' +
+            '<label>Access level <select name="access_mode">' +
+            option('audit', 'audit - Read system logs', access.access_mode) +
+            option('docker', 'docker - Manage containers', access.access_mode) +
+            option('sudo_prompted', 'sudo (prompted) - Full admin access', access.access_mode) +
+            option('sudo_passwordless', 'sudo (passwordless) - Full admin access', access.access_mode) +
+            '</select></label>' +
+            '<label>SSH key <select name="ssh_key_id">' + keyOptions + '</select></label>' +
+            '<button type="submit">Save policy</button>' +
+            '</form></details>'
+          ) : '<p class="muted">Switch this device to access-managed mode before editing managed user access.</p>'));
+      });
+      function option(value, label, current) {
+        return '<option value="' + value + '"' + (current === value ? ' selected' : '') + '>' + escapeHTML(label) + '</option>';
+      }
+      function escapeHTML(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      }
+    })();
+  </script>
 </body>
 </html>
 {{ end }}

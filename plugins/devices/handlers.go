@@ -25,7 +25,17 @@ func (rt runtime) handleTargetsPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	rt.render(w, "targets.html", map[string]any{"Targets": targets})
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if query != "" {
+		filtered := targets[:0]
+		for _, target := range targets {
+			if targetMatches(target, query) {
+				filtered = append(filtered, target)
+			}
+		}
+		targets = filtered
+	}
+	rt.render(w, "targets.html", map[string]any{"Targets": targets, "Query": query})
 }
 
 func (rt runtime) handleTargetPage(w http.ResponseWriter, r *http.Request) {
@@ -39,6 +49,27 @@ func (rt runtime) handleTargetPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rt.render(w, "target.html", map[string]any{"Target": target})
+}
+
+func (rt runtime) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
+	input, ok := targetInputFromRequest(w, r)
+	if !ok {
+		return
+	}
+	target, err := rt.targets.Update(r.Context(), r.PathValue("id"), input)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if wantsHTML(r) {
+		http.Redirect(w, r, "/devices/"+target.ID, http.StatusSeeOther)
+		return
+	}
+	writeJSON(w, http.StatusOK, target)
 }
 
 func (rt runtime) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
@@ -217,7 +248,26 @@ func targetInputFromRequest(w http.ResponseWriter, r *http.Request) (pluginhost.
 	if ips := strings.TrimSpace(r.FormValue("ips")); ips != "" {
 		input.IPs = strings.FieldsFunc(ips, func(r rune) bool { return r == ',' || r == ' ' || r == '\n' || r == '\t' })
 	}
+	if tags := strings.TrimSpace(r.FormValue("tags")); tags != "" {
+		input.Tags = strings.FieldsFunc(tags, func(r rune) bool { return r == ',' || r == ' ' || r == '\n' || r == '\t' })
+	}
 	return input, true
+}
+
+func targetMatches(target pluginhost.Target, query string) bool {
+	q := strings.ToLower(strings.TrimSpace(query))
+	if q == "" {
+		return true
+	}
+	fields := []string{target.ID, target.Name, target.Kind, target.Hostname, target.APIURL, target.SSHHost, target.SSHUser, target.Note, target.CreatedBy}
+	fields = append(fields, target.IPs...)
+	fields = append(fields, target.Tags...)
+	for _, field := range fields {
+		if strings.Contains(strings.ToLower(field), q) {
+			return true
+		}
+	}
+	return false
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
