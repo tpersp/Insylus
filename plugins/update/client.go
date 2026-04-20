@@ -127,7 +127,7 @@ func serverAssetNameCandidates(goos, goarch string) []string {
 
 func serverAssetName(tagName string, goos, goarch string) (binary, checksum string) {
 	binary = fmt.Sprintf("%s-%s-%s", InsylusBinaryName, goos, goarch)
-	checksum = fmt.Sprintf("%s-%s-%s.sha256", InsylusBinaryName, goos, goarch, strings.TrimPrefix(tagName, "v"))
+	checksum = fmt.Sprintf("%s-%s-%s-v%s.sha256", InsylusBinaryName, goos, goarch, strings.TrimPrefix(tagName, "v"))
 	return binary, checksum
 }
 
