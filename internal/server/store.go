@@ -1148,6 +1148,16 @@ func (s *Store) SetManagedAccountConfig(ctx context.Context, cfg shared.ManagedA
 		_ = tx.Rollback()
 		return err
 	}
+	cfg.ManagedGroups = splitManagedGroups(strings.Join(cfg.ManagedGroups, ","))
+	if len(cfg.ManagedGroups) > 0 {
+		if _, err := tx.ExecContext(ctx, `
+			insert into app_settings (key, value, updated_at)
+			values ('managed_groups', ?, ?)
+			on conflict(key) do update set value = excluded.value, updated_at = excluded.updated_at`, strings.Join(cfg.ManagedGroups, ","), now); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
 	return tx.Commit()
 }
 

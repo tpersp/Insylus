@@ -88,7 +88,9 @@ func (a *App) withManagedAccountPolicy(ctx context.Context, policy shared.AgentP
 	user := cfg.ManagedUser
 	policy.ManagedUser = user
 	policy.ManagedGroups = cfg.ManagedGroups
-	policy.AccessMode = cfg.AccessMode
+	if policy.AccessMode == "" || policy.DeviceMode == shared.DeviceModeInventoryOnly {
+		policy.AccessMode = cfg.AccessMode
+	}
 	policy.SudoersPath = "/etc/sudoers.d/insylus-" + user
 	policy.AuditReadmePath = "/etc/sudoers.d/insylus-" + user + "-audit-readme"
 	policy.AuthorizedKeysPath = "/home/" + user + "/.ssh/authorized_keys"
