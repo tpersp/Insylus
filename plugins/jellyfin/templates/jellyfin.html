@@ -84,6 +84,7 @@
               <th>API</th>
               <th>Updated</th>
               <th></th>
+              <th>Browse</th>
             </tr>
           </thead>
           <tbody>
@@ -110,15 +111,151 @@
                 </form>
                 {{ end }}
               </td>
+              <td>
+                {{ if .HasToken }}
+                <button type="button" class="button-secondary compact-button" data-jellyfin-view="libraries" data-device-id="{{ .DeviceID }}">Libraries</button>
+                <button type="button" class="button-secondary compact-button" data-jellyfin-view="latest" data-device-id="{{ .DeviceID }}">Latest</button>
+                <button type="button" class="button-secondary compact-button" data-jellyfin-view="resume" data-device-id="{{ .DeviceID }}">Resume</button>
+                <button type="button" class="button-secondary compact-button" data-jellyfin-view="movies" data-device-id="{{ .DeviceID }}">Movies</button>
+                <button type="button" class="button-secondary compact-button" data-jellyfin-view="series" data-device-id="{{ .DeviceID }}">Series</button>
+                {{ else }}
+                <span class="muted">-</span>
+                {{ end }}
+              </td>
             </tr>
             {{ else }}
-            <tr><td colspan="6">No Jellyfin servers detected or configured yet.</td></tr>
+            <tr><td colspan="8">No Jellyfin servers detected or configured yet.</td></tr>
             {{ end }}
           </tbody>
         </table>
       </div>
     </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Library</p>
+          <h2>Jellyfin Browser</h2>
+        </div>
+      </div>
+      <div id="jellyfin-status" class="muted">Choose a configured server.</div>
+      <div id="jellyfin-output"></div>
+    </section>
   </main>
+  <script>
+    (function() {
+      const statusEl = document.getElementById('jellyfin-status');
+      const outputEl = document.getElementById('jellyfin-output');
+      document.querySelectorAll('[data-jellyfin-view]').forEach(button => {
+        button.addEventListener('click', () => loadView(button.dataset.deviceId, button.dataset.jellyfinView));
+      });
+
+      async function loadView(deviceID, view) {
+        setStatus('Loading ' + view + '...');
+        try {
+          let data;
+          if (view === 'libraries') {
+            data = await fetchJSON('/api/jellyfin/' + encodeURIComponent(deviceID) + '/libraries');
+            renderLibraries(deviceID, data || []);
+          } else if (view === 'resume') {
+            data = await fetchJSON('/api/jellyfin/' + encodeURIComponent(deviceID) + '/resume');
+            renderProgress(data || []);
+          } else {
+            data = await fetchJSON('/api/jellyfin/' + encodeURIComponent(deviceID) + '/' + view);
+            renderItems(deviceID, data || []);
+          }
+          setStatus('Loaded ' + view);
+        } catch (err) {
+          setError(err);
+        }
+      }
+
+      function renderLibraries(deviceID, rows) {
+        if (!rows.length) {
+          outputEl.innerHTML = '<p class="muted">No libraries returned.</p>';
+          return;
+        }
+        outputEl.innerHTML = '<div class="table-wrap"><table class="device-table"><thead><tr><th>Name</th><th>Type</th><th>ID</th><th></th></tr></thead><tbody>' +
+          rows.map(item => '<tr><td><strong>' + escapeHTML(item.Name || item.name || '-') + '</strong></td><td>' + escapeHTML(item.CollectionType || item.collection_type || '-') + '</td><td><code>' + escapeHTML(item.Id || item.ID || item.id || '') + '</code></td><td><button type="button" class="button-secondary compact-button" data-library-id="' + escapeHTML(item.Id || item.ID || item.id || '') + '" data-device-id="' + escapeHTML(deviceID) + '">Items</button></td></tr>').join('') +
+          '</tbody></table></div>';
+        outputEl.querySelectorAll('[data-library-id]').forEach(button => {
+          button.addEventListener('click', () => loadLibraryItems(button.dataset.deviceId, button.dataset.libraryId));
+        });
+      }
+
+      async function loadLibraryItems(deviceID, parentID) {
+        setStatus('Loading library items...');
+        try {
+          const items = await fetchJSON('/api/jellyfin/' + encodeURIComponent(deviceID) + '/items?parentId=' + encodeURIComponent(parentID));
+          renderItems(deviceID, items || []);
+          setStatus('Library items loaded');
+        } catch (err) {
+          setError(err);
+        }
+      }
+
+      function renderItems(deviceID, rows) {
+        if (!rows.length) {
+          outputEl.innerHTML = '<p class="muted">No items returned.</p>';
+          return;
+        }
+        outputEl.innerHTML = '<div class="table-wrap"><table class="device-table"><thead><tr><th>Name</th><th>Type</th><th>Series</th><th>Runtime</th><th></th></tr></thead><tbody>' +
+          rows.map(item => '<tr><td><strong>' + escapeHTML(item.Name || '-') + '</strong></td><td>' + escapeHTML(item.Type || '-') + '</td><td>' + escapeHTML(item.SeriesName || '-') + '</td><td>' + formatRuntime(item.RunTimeTicks || 0) + '</td><td><button type="button" class="button-secondary compact-button" data-item-id="' + escapeHTML(item.Id || item.ID || '') + '" data-device-id="' + escapeHTML(deviceID) + '">Details</button></td></tr>').join('') +
+          '</tbody></table></div>';
+        outputEl.querySelectorAll('[data-item-id]').forEach(button => {
+          button.addEventListener('click', () => loadItem(button.dataset.deviceId, button.dataset.itemId));
+        });
+      }
+
+      function renderProgress(rows) {
+        if (!rows.length) {
+          outputEl.innerHTML = '<p class="muted">No resumable items returned.</p>';
+          return;
+        }
+        outputEl.innerHTML = '<div class="table-wrap"><table class="device-table"><thead><tr><th>Name</th><th>Type</th><th>Progress</th><th>Position</th><th>Duration</th></tr></thead><tbody>' +
+          rows.map(item => '<tr><td><strong>' + escapeHTML(item.name || item.Name || '-') + '</strong><span class="subtle">' + escapeHTML(item.series_name || '') + '</span></td><td>' + escapeHTML(item.type || '-') + '</td><td>' + escapeHTML(Math.round(item.progress || 0)) + '%</td><td>' + escapeHTML(item.position || '-') + '</td><td>' + escapeHTML(item.duration || '-') + '</td></tr>').join('') +
+          '</tbody></table></div>';
+      }
+
+      async function loadItem(deviceID, itemID) {
+        setStatus('Loading item...');
+        try {
+          const item = await fetchJSON('/api/jellyfin/' + encodeURIComponent(deviceID) + '/items/' + encodeURIComponent(itemID));
+          outputEl.innerHTML = '<div class="facts">' +
+            '<p><span>Name</span><strong>' + escapeHTML(item.Name || '-') + '</strong></p>' +
+            '<p><span>Type</span>' + escapeHTML(item.Type || '-') + '</p>' +
+            '<p><span>Series</span>' + escapeHTML(item.SeriesName || '-') + '</p>' +
+            '<p><span>Runtime</span>' + formatRuntime(item.RunTimeTicks || 0) + '</p>' +
+            '<p><span>Overview</span>' + escapeHTML(item.Overview || '-') + '</p>' +
+            '</div>';
+          setStatus('Item loaded');
+        } catch (err) {
+          setError(err);
+        }
+      }
+
+      async function fetchJSON(url) {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(await resp.text() || ('request failed: ' + resp.status));
+        return resp.json();
+      }
+      function setStatus(text) { statusEl.textContent = text; }
+      function setError(err) {
+        statusEl.textContent = 'Error';
+        outputEl.innerHTML = '<p class="muted">' + escapeHTML(err.message) + '</p>';
+      }
+      function formatRuntime(ticks) {
+        const seconds = Math.floor((Number(ticks) || 0) / 10000000);
+        if (!seconds) return '-';
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        return h ? h + 'h ' + m + 'm' : m + 'm';
+      }
+      function escapeHTML(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      }
+    })();
+  </script>
 </body>
 </html>
 {{ end }}

@@ -85,11 +85,12 @@
               <th>API</th>
               <th>Updated</th>
               <th></th>
+              <th>Control</th>
             </tr>
           </thead>
           <tbody>
             {{ range .Nodes }}
-            <tr>
+            <tr data-proxmox-node="{{ .DeviceID }}">
               <td><a class="device-link" href="/devices/{{ .DeviceID }}">{{ .DeviceName }}</a></td>
               <td>{{ if .NodeName }}{{ .NodeName }}{{ else }}<span class="muted">unset</span>{{ end }}</td>
               <td>
@@ -109,15 +110,144 @@
                 </form>
                 {{ end }}
               </td>
+              <td>
+                {{ if .HasToken }}
+                <button type="button" class="button-secondary compact-button" data-proxmox-action="load" data-device-id="{{ .DeviceID }}">Guests</button>
+                <button type="button" class="button-secondary compact-button" data-proxmox-action="node-status" data-device-id="{{ .DeviceID }}">Node</button>
+                <button type="button" class="button-secondary compact-button" data-proxmox-action="cluster-status" data-device-id="{{ .DeviceID }}">Cluster</button>
+                {{ else }}
+                <span class="muted">-</span>
+                {{ end }}
+              </td>
             </tr>
             {{ else }}
-            <tr><td colspan="7">No Proxmox nodes detected or configured yet.</td></tr>
+            <tr><td colspan="8">No Proxmox nodes detected or configured yet.</td></tr>
             {{ end }}
           </tbody>
         </table>
       </div>
     </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Guests</p>
+          <h2>Proxmox Control</h2>
+        </div>
+      </div>
+      <div id="proxmox-status" class="muted">Choose a configured node.</div>
+      <div id="proxmox-output"></div>
+    </section>
   </main>
+  <script>
+    (function() {
+      const statusEl = document.getElementById('proxmox-status');
+      const outputEl = document.getElementById('proxmox-output');
+      document.querySelectorAll('[data-proxmox-action]').forEach(button => {
+        button.addEventListener('click', () => {
+          const action = button.dataset.proxmoxAction;
+          const id = button.dataset.deviceId;
+          if (action === 'load') loadGuests(id);
+          if (action === 'node-status') loadNodeStatus(id);
+          if (action === 'cluster-status') loadClusterStatus(id);
+        });
+      });
+
+      async function loadGuests(deviceID) {
+        setStatus('Loading guests...');
+        try {
+          const data = await fetchJSON('/api/proxmox/' + encodeURIComponent(deviceID) + '/guests');
+          const guests = data.guests || [];
+          if (!guests.length) {
+            outputEl.innerHTML = '<p class="muted">No guests returned.</p>';
+            setStatus('Loaded');
+            return;
+          }
+          outputEl.innerHTML = '<div class="table-wrap"><table class="device-table"><thead><tr><th>VMID</th><th>Name</th><th>Type</th><th>Status</th><th>Memory</th><th>Actions</th></tr></thead><tbody>' +
+            guests.map(g => '<tr><td><code>' + escapeHTML(g.vmid) + '</code></td><td><strong>' + escapeHTML(g.name || '-') + '</strong></td><td>' + escapeHTML(g.type || '-') + '</td><td><span class="pill ' + (g.status === 'running' ? 'pill-ok' : 'pill-muted') + '">' + escapeHTML(g.status || '-') + '</span></td><td>' + formatBytes(g.memory || 0) + ' / ' + formatBytes(g.max_memory || 0) + '</td><td>' + guestButtons(deviceID, g) + '</td></tr>').join('') +
+            '</tbody></table></div>';
+          outputEl.querySelectorAll('[data-guest-action]').forEach(button => {
+            button.addEventListener('click', () => runGuestAction(button.dataset.deviceId, button.dataset.guestAction, button.dataset.target));
+          });
+          setStatus('Loaded ' + guests.length + ' guests');
+        } catch (err) {
+          setError(err);
+        }
+      }
+
+      async function loadNodeStatus(deviceID) {
+        setStatus('Loading node status...');
+        try {
+          const s = await fetchJSON('/api/proxmox/' + encodeURIComponent(deviceID) + '/node-status');
+          outputEl.innerHTML = '<div class="facts">' +
+            '<p><span>Node</span><strong>' + escapeHTML(s.node || deviceID) + '</strong></p>' +
+            '<p><span>CPU</span>' + escapeHTML(percent(s.cpu_usage)) + '</p>' +
+            '<p><span>Memory</span>' + formatBytes(s.memory_used || 0) + ' / ' + formatBytes(s.memory_total || 0) + '</p>' +
+            '<p><span>Disk</span>' + formatBytes(s.disk_used || 0) + ' / ' + formatBytes(s.disk_total || 0) + '</p>' +
+            '<p><span>Load</span>' + escapeHTML((s.load_average || []).join(', ') || '-') + '</p>' +
+            '</div>';
+          setStatus('Node status loaded');
+        } catch (err) {
+          setError(err);
+        }
+      }
+
+      async function loadClusterStatus(deviceID) {
+        setStatus('Loading cluster status...');
+        try {
+          const rows = await fetchJSON('/api/proxmox/' + encodeURIComponent(deviceID) + '/cluster-status');
+          outputEl.innerHTML = '<div class="table-wrap"><table class="device-table"><thead><tr><th>Type</th><th>Name</th><th>Node</th><th>Status</th><th>CPU</th><th>Memory</th></tr></thead><tbody>' +
+            (rows || []).map(r => '<tr><td>' + escapeHTML(r.type || '-') + '</td><td>' + escapeHTML(r.name || r.id || '-') + '</td><td>' + escapeHTML(r.node || '-') + '</td><td>' + escapeHTML(r.status || '-') + '</td><td>' + escapeHTML(percent(r.cpu)) + '</td><td>' + formatBytes(r.memory || 0) + ' / ' + formatBytes(r.max_memory || 0) + '</td></tr>').join('') +
+            '</tbody></table></div>';
+          setStatus('Cluster status loaded');
+        } catch (err) {
+          setError(err);
+        }
+      }
+
+      async function runGuestAction(deviceID, action, target) {
+        if (!confirm(action + ' ' + target + '?')) return;
+        setStatus('Submitting ' + action + '...');
+        try {
+          await fetchJSON('/api/proxmox/' + encodeURIComponent(deviceID) + '/' + action + '/' + encodeURIComponent(target), { method: 'POST' });
+          await loadGuests(deviceID);
+        } catch (err) {
+          setError(err);
+        }
+      }
+
+      function guestButtons(deviceID, guest) {
+        const target = guest.name || String(guest.vmid);
+        const start = '<button type="button" class="button-secondary compact-button" data-guest-action="start" data-device-id="' + escapeHTML(deviceID) + '" data-target="' + escapeHTML(target) + '">Start</button>';
+        const stop = '<button type="button" class="button-secondary compact-button" data-guest-action="stop" data-device-id="' + escapeHTML(deviceID) + '" data-target="' + escapeHTML(target) + '">Stop</button>';
+        const restart = '<button type="button" class="button-secondary compact-button" data-guest-action="restart" data-device-id="' + escapeHTML(deviceID) + '" data-target="' + escapeHTML(target) + '">Restart</button>';
+        return guest.status === 'running' ? stop + ' ' + restart : start;
+      }
+
+      async function fetchJSON(url, opts) {
+        const resp = await fetch(url, opts || {});
+        if (!resp.ok) throw new Error(await resp.text() || ('request failed: ' + resp.status));
+        return resp.json();
+      }
+      function setStatus(text) { statusEl.textContent = text; }
+      function setError(err) {
+        statusEl.textContent = 'Error';
+        outputEl.innerHTML = '<p class="muted">' + escapeHTML(err.message) + '</p>';
+      }
+      function percent(v) { return ((Number(v) || 0) * 100).toFixed(1) + '%'; }
+      function formatBytes(bytes) {
+        bytes = Number(bytes) || 0;
+        if (!bytes) return '0 B';
+        const units = ['B','KiB','MiB','GiB','TiB'];
+        let i = 0;
+        while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
+        return bytes.toFixed(i ? 1 : 0) + ' ' + units[i];
+      }
+      function escapeHTML(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      }
+    })();
+  </script>
 </body>
 </html>
 {{ end }}
