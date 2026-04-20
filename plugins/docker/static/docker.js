@@ -19,6 +19,7 @@
   const containersBody = document.getElementById('containers-body');
   const imagesBody = document.getElementById('images-body');
   const showAllToggle = document.getElementById('show-all-toggle');
+  const detailPanel = document.getElementById('container-detail-panel');
 
   if (containersBody) {
     loadContainers(deviceId);
@@ -135,6 +136,9 @@
       containersBody.querySelectorAll('[data-action]').forEach(function(btn) {
         btn.addEventListener('click', handleContainerAction);
       });
+      containersBody.querySelectorAll('[data-view]').forEach(function(btn) {
+        btn.addEventListener('click', handleContainerView);
+      });
       containersBody.querySelectorAll('.container-detail-link').forEach(function(link) {
         link.addEventListener('click', function(e) {
           e.preventDefault();
@@ -177,6 +181,9 @@
   function buildActionButtons(name, state) {
     const encName = encodeURIComponent(name);
     const buttons = [];
+    buttons.push('<button class="button-secondary compact-button" data-view="details" data-name="' + escapeHTML(name) + '">Details</button>');
+    buttons.push('<button class="button-secondary compact-button" data-view="logs" data-name="' + escapeHTML(name) + '">Logs</button>');
+    buttons.push('<button class="button-secondary compact-button" data-view="stats" data-name="' + escapeHTML(name) + '">Stats</button>');
     if (state !== 'running') {
       buttons.push('<button class="button-secondary compact-button" data-action="start" data-name="' + escapeHTML(name) + '">Start</button>');
     }
@@ -214,25 +221,79 @@
     }
   }
 
+  function handleContainerView(e) {
+    e.preventDefault();
+    const view = e.currentTarget.dataset.view;
+    const name = e.currentTarget.dataset.name;
+    if (view === 'details') {
+      showContainerDetail(deviceId, name);
+    } else if (view === 'logs') {
+      showContainerLogs(deviceId, name);
+    } else if (view === 'stats') {
+      showContainerStats(deviceId, name);
+    }
+  }
+
   async function showContainerDetail(deviceId, name) {
     const encName = encodeURIComponent(name);
     try {
       const resp = await fetch('/api/docker/containers/' + encodeURIComponent(deviceId) + '/' + encName + '/inspect');
       if (!resp.ok) throw new Error('Failed to load container details');
       const data = await resp.json();
-      alert('Container: ' + data.name +
-        '\nID: ' + (data.id ? data.id.substring(0, 12) : '-') +
-        '\nImage: ' + data.image +
-        '\nState: ' + data.state +
-        '\nStatus: ' + data.status +
-        '\nNetworks: ' + (data.networks ? data.networks.join(', ') : '-') +
-        '\nPorts: ' + (data.ports_detail ? data.ports_detail.map(function(p) {
-          return p.host_ip + ':' + p.host_port + '->' + p.cont_port + '/' + p.protocol;
-        }).join(', ') : '-') +
-        '\nCommand: ' + (data.cmd ? data.cmd.join(' ') : '-')
-      );
+      setDetailPanel('<div class="facts">' +
+        '<p><span>Container</span><strong>' + escapeHTML(data.name) + '</strong></p>' +
+        '<p><span>ID</span><code>' + escapeHTML(data.id ? data.id.substring(0, 12) : '-') + '</code></p>' +
+        '<p><span>Image</span>' + escapeHTML(data.image || '-') + '</p>' +
+        '<p><span>State</span>' + escapeHTML(data.state || '-') + '</p>' +
+        '<p><span>Status</span>' + escapeHTML(data.status || '-') + '</p>' +
+        '<p><span>Networks</span>' + escapeHTML(data.networks ? data.networks.join(', ') : '-') + '</p>' +
+        '<p><span>Ports</span>' + escapeHTML(data.ports_detail ? data.ports_detail.map(function(p) {
+          return (p.host_ip || '') + ':' + (p.host_port || '') + ' -> ' + p.cont_port + '/' + p.protocol;
+        }).join(', ') : '-') + '</p>' +
+        '<p><span>Command</span><code>' + escapeHTML(data.cmd ? data.cmd.join(' ') : '-') + '</code></p>' +
+        '<p><span>Mounts</span>' + escapeHTML(data.mounts ? data.mounts.join(', ') : '-') + '</p>' +
+        '</div>');
     } catch (e) {
-      alert('Failed to load details: ' + e.message);
+      setDetailPanel('<p class="muted">Failed to load details: ' + escapeHTML(e.message) + '</p>');
+    }
+  }
+
+  async function showContainerLogs(deviceId, name) {
+    const encName = encodeURIComponent(name);
+    try {
+      const resp = await fetch('/api/docker/containers/' + encodeURIComponent(deviceId) + '/' + encName + '/logs?tail=200&timestamps=true');
+      if (!resp.ok) throw new Error('Failed to load logs');
+      const rows = await resp.json();
+      const html = '<h3>' + escapeHTML(name) + ' logs</h3><pre class="log-output">' + escapeHTML((rows || []).map(function(row) {
+        return (row.timestamp && row.timestamp !== '0001-01-01T00:00:00Z' ? row.timestamp + ' ' : '') + row.message;
+      }).join('\n') || 'No logs returned.') + '</pre>';
+      setDetailPanel(html);
+    } catch (e) {
+      setDetailPanel('<p class="muted">Failed to load logs: ' + escapeHTML(e.message) + '</p>');
+    }
+  }
+
+  async function showContainerStats(deviceId, name) {
+    const encName = encodeURIComponent(name);
+    try {
+      const resp = await fetch('/api/docker/containers/' + encodeURIComponent(deviceId) + '/' + encName + '/stats');
+      if (!resp.ok) throw new Error('Failed to load stats');
+      const stats = await resp.json();
+      setDetailPanel('<div class="facts">' +
+        '<p><span>Container</span><strong>' + escapeHTML(name) + '</strong></p>' +
+        '<p><span>CPU</span>' + escapeHTML((stats.cpu_percent || 0).toFixed ? stats.cpu_percent.toFixed(2) : stats.cpu_percent) + '%</p>' +
+        '<p><span>Memory</span>' + formatBytes(stats.memory ? stats.memory.used : 0) + ' / ' + formatBytes(stats.memory ? stats.memory.limit : 0) + '</p>' +
+        '<p><span>Memory %</span>' + escapeHTML(stats.memory ? stats.memory.percent : 0) + '%</p>' +
+        '</div>');
+    } catch (e) {
+      setDetailPanel('<p class="muted">Failed to load stats: ' + escapeHTML(e.message) + '</p>');
+    }
+  }
+
+  function setDetailPanel(html) {
+    if (detailPanel) {
+      detailPanel.className = '';
+      detailPanel.innerHTML = html;
     }
   }
 
