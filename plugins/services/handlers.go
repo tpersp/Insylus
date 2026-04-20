@@ -26,7 +26,24 @@ type runtime struct {
 }
 
 func (rt runtime) handleServicesPage(w http.ResponseWriter, r *http.Request) {
-	services, err := rt.store.listServiceInstances(r.Context())
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	deviceQuery := strings.TrimSpace(r.URL.Query().Get("device"))
+	var (
+		services []serviceInstanceRecord
+		err      error
+	)
+	switch {
+	case deviceQuery != "":
+		deviceID, ok := rt.resolveDeviceFindForFilter(w, r, deviceQuery)
+		if !ok {
+			return
+		}
+		services, err = rt.store.listServiceInstancesForDevice(r.Context(), deviceID)
+	case query != "":
+		services, err = rt.store.searchServiceInstances(r.Context(), query)
+	default:
+		services, err = rt.store.listServiceInstances(r.Context())
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -40,6 +57,8 @@ func (rt runtime) handleServicesPage(w http.ResponseWriter, r *http.Request) {
 		Services: services,
 		Groups:   serviceListFromRecords(services),
 		Events:   events,
+		Query:    query,
+		Device:   deviceQuery,
 	})
 }
 

@@ -39,6 +39,8 @@ type servicesPageData struct {
 	Services []serviceInstanceRecord
 	Groups   []shared.ServiceListItem
 	Events   []serviceEventRecord
+	Query    string
+	Device   string
 }
 
 type historyPageData struct {
