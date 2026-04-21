@@ -53,6 +53,7 @@ func (Plugin) Register(host pluginhost.Host) error {
 		host.API().HandleFunc("POST /api/update/check", rt.handleCheckUpdate)
 		host.API().HandleFunc("POST /api/update/apply", rt.handleApplyUpdate)
 		host.API().HandleFunc("GET /api/update/history", rt.handleUpdateHistory)
+		rt.startAutoUpdateLoop()
 	}
 	if host.Migrations().Enabled() {
 		host.Migrations().Add(pluginhost.Migration{

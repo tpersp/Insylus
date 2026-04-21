@@ -25,6 +25,9 @@
   if (historyBody && api.history) {
     loadHistory();
   }
+  if (api.check) {
+    checkForUpdates();
+  }
 
   async function checkForUpdates() {
     if (checkBtn) {

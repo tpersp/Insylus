@@ -10,6 +10,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	"insylus/internal/pluginhost"
 	"insylus/internal/version"
@@ -22,7 +25,13 @@ type runtime struct {
 	helperPath string
 	stagingDir string
 	render     func(http.ResponseWriter, string, any)
+	plugins    pluginhost.PluginRegistry
 }
+
+var (
+	autoUpdateLoopOnce sync.Once
+	autoUpdateRunning  atomic.Bool
+)
 
 func newRuntime(host pluginhost.Host) runtime {
 	return runtime{
@@ -32,6 +41,7 @@ func newRuntime(host pluginhost.Host) runtime {
 		helperPath: envDefault("INSYLUS_UPDATE_HELPER_PATH", DefaultHelperPath),
 		stagingDir: envDefault("INSYLUS_UPDATE_STAGING_DIR", DefaultStagingDir),
 		render:     host.Web().Render,
+		plugins:    host.Plugins(),
 	}
 }
 
@@ -49,7 +59,7 @@ func (rt runtime) handleUpdatePage(w http.ResponseWriter, r *http.Request) {
 
 // handleCheckUpdate handles the check for updates API.
 func (rt runtime) handleCheckUpdate(w http.ResponseWriter, r *http.Request) {
-	release, err := rt.client.FetchLatestRelease(r.Context())
+	response, err := rt.checkForUpdate(r.Context())
 	if err != nil {
 		if errors.Is(err, ErrNoLatestRelease) {
 			writeJSON(w, http.StatusOK, UpdateCheckResponse{
@@ -64,33 +74,6 @@ func (rt runtime) handleCheckUpdate(w http.ResponseWriter, r *http.Request) {
 			"error": "Failed to check for updates: " + err.Error(),
 		})
 		return
-	}
-
-	latestVersion := ExtractVersionFromTag(release.TagName)
-	_, _, _, skippedVersion, _ := rt.store.GetUpdateSettings(r.Context())
-
-	if err := rt.store.SetLastCheckedAt(r.Context()); err != nil {
-		// Non-fatal, continue
-	}
-
-	updateAvailable := latestVersion != rt.version && latestVersion != skippedVersion
-	pkg, assetErr := ReleasePackageAssets(release)
-	message := ""
-	if updateAvailable && assetErr != nil {
-		updateAvailable = false
-		message = "A controller update is available, but the full update bundle is not ready yet."
-	}
-
-	response := UpdateCheckResponse{
-		CurrentVersion:  rt.version,
-		LatestVersion:   latestVersion,
-		UpdateAvailable: updateAvailable,
-		Message:         message,
-		ReleaseNotes:    ParseReleaseNotes(release.Body),
-		DownloadURL:     pkg.DownloadURL,
-		ChecksumURL:     pkg.ChecksumURL,
-		PublishedAt:     release.PublishedAt,
-		SkippedVersion:  skippedVersion,
 	}
 
 	writeJSON(w, http.StatusOK, response)
@@ -254,6 +237,91 @@ func (rt runtime) restartService() error {
 		return fmt.Errorf("restart server: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return nil
+}
+
+func (rt runtime) checkForUpdate(ctx context.Context) (UpdateCheckResponse, error) {
+	release, err := rt.client.FetchLatestRelease(ctx)
+	if err != nil {
+		return UpdateCheckResponse{}, err
+	}
+
+	latestVersion := ExtractVersionFromTag(release.TagName)
+	_, _, _, skippedVersion, _ := rt.store.GetUpdateSettings(ctx)
+
+	if err := rt.store.SetLastCheckedAt(ctx); err != nil {
+		// Non-fatal, continue
+	}
+
+	updateAvailable := latestVersion != rt.version && latestVersion != skippedVersion
+	pkg, assetErr := ReleasePackageAssets(release)
+	message := ""
+	if updateAvailable && assetErr != nil {
+		updateAvailable = false
+		message = "A controller update is available, but the full update bundle is not ready yet."
+	}
+
+	return UpdateCheckResponse{
+		CurrentVersion:  rt.version,
+		LatestVersion:   latestVersion,
+		UpdateAvailable: updateAvailable,
+		Message:         message,
+		ReleaseNotes:    ParseReleaseNotes(release.Body),
+		DownloadURL:     pkg.DownloadURL,
+		ChecksumURL:     pkg.ChecksumURL,
+		PublishedAt:     release.PublishedAt,
+		SkippedVersion:  skippedVersion,
+	}, nil
+}
+
+func (rt runtime) startAutoUpdateLoop() {
+	autoUpdateLoopOnce.Do(func() {
+		go func() {
+			timer := time.NewTimer(10 * time.Second)
+			defer timer.Stop()
+			ticker := time.NewTicker(15 * time.Minute)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-timer.C:
+					rt.maybeAutoApplyLatest(context.Background())
+				case <-ticker.C:
+					rt.maybeAutoApplyLatest(context.Background())
+				}
+			}
+		}()
+	})
+}
+
+func (rt runtime) maybeAutoApplyLatest(ctx context.Context) {
+	if rt.plugins != nil && !rt.plugins.Enabled("update") {
+		return
+	}
+	autoEnabled, _, _, skippedVersion, err := rt.store.GetUpdateSettings(ctx)
+	if err != nil || !autoEnabled {
+		return
+	}
+	if !autoUpdateRunning.CompareAndSwap(false, true) {
+		return
+	}
+	defer autoUpdateRunning.Store(false)
+
+	response, err := rt.checkForUpdate(ctx)
+	if err != nil || !response.UpdateAvailable || response.LatestVersion == "" || response.LatestVersion == skippedVersion {
+		return
+	}
+	release, err := rt.client.FetchReleaseByTag(ctx, versionTag(response.LatestVersion))
+	if err != nil {
+		return
+	}
+	pkg, err := ReleasePackageAssets(release)
+	if err != nil {
+		return
+	}
+	id, err := rt.store.CreateUpdate(ctx, response.LatestVersion, release.PublishedAt, "pending", "automatic update")
+	if err != nil {
+		return
+	}
+	rt.performUpdate(context.Background(), id, response.LatestVersion, pkg)
 }
 
 func (rt runtime) rollbackAppliedBundle() error {
