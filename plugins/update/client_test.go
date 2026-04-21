@@ -147,3 +147,38 @@ func TestExtractTarGzExtractsBundleFiles(t *testing.T) {
 		t.Fatalf("bundle content = %q, want hello", string(got))
 	}
 }
+
+func TestExtractTarGzAcceptsRootDotDirectoryEntry(t *testing.T) {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+
+	if err := tw.WriteHeader(&tar.Header{Name: "./", Typeflag: tar.TypeDir, Mode: 0o755}); err != nil {
+		t.Fatalf("WriteHeader root dir: %v", err)
+	}
+	payload := []byte("ok")
+	if err := tw.WriteHeader(&tar.Header{Name: "./insylus-server", Mode: 0o755, Size: int64(len(payload))}); err != nil {
+		t.Fatalf("WriteHeader file: %v", err)
+	}
+	if _, err := tw.Write(payload); err != nil {
+		t.Fatalf("Write payload: %v", err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatalf("Close tar: %v", err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatalf("Close gzip: %v", err)
+	}
+
+	dst := t.TempDir()
+	if err := extractTarGz(buf.Bytes(), dst); err != nil {
+		t.Fatalf("extractTarGz with root ./ entry: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dst, "insylus-server"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(got) != "ok" {
+		t.Fatalf("bundle content = %q, want ok", string(got))
+	}
+}
