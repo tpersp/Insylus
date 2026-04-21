@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"insylus/internal/pluginhost"
@@ -248,6 +249,69 @@ func TestDockerConfigPrefersPluginConnectionAndDeleteKeepsTarget(t *testing.T) {
 	doJSONRequest(t, app.Handler(), http.MethodGet, "/api/targets/"+target.ID, "", nil, &stillThere)
 	if stillThere.ID != target.ID {
 		t.Fatalf("expected target to remain after Docker config delete, got %+v", stillThere)
+	}
+}
+
+func TestDiscoveryPluginListsAndPromotesCandidates(t *testing.T) {
+	app := newTestAppWithEnabledPlugins(t, Config{
+		DBPath: filepath.Join(t.TempDir(), "insylus.db"),
+	}, "discovery")
+	defer app.Close()
+
+	now := "2026-04-21T12:00:00Z"
+	res, err := app.store.db.ExecContext(context.Background(), `
+		insert into discovered_devices (
+			fingerprint, display_name, hostname, ip_address, mac_address, open_ports_json,
+			status, status_note, source_cidr, kind_hint, first_seen_at, last_seen_at, created_at, updated_at
+		)
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"ip:10.10.10.20",
+		"atlas",
+		"atlas.local",
+		"10.10.10.20",
+		"aa:bb:cc:dd:ee:ff",
+		`[22,443]`,
+		"pending",
+		"",
+		"10.10.10.0/24",
+		"linux-host",
+		now,
+		now,
+		now,
+		now,
+	)
+	if err != nil {
+		t.Fatalf("insert discovered device: %v", err)
+	}
+	candidateID, _ := res.LastInsertId()
+
+	type discoveredCandidate struct {
+		ID               int64  `json:"id"`
+		DisplayName      string `json:"display_name"`
+		IPAddress        string `json:"ip_address"`
+		Status           string `json:"status"`
+		PromotedTargetID string `json:"promoted_target_id"`
+	}
+	var candidates []discoveredCandidate
+	doJSONRequest(t, app.Handler(), http.MethodGet, "/api/discovery", "", nil, &candidates)
+	if len(candidates) != 1 || candidates[0].DisplayName != "atlas" || candidates[0].IPAddress != "10.10.10.20" {
+		t.Fatalf("unexpected discovery list: %+v", candidates)
+	}
+
+	type promoteResponse struct {
+		Candidate discoveredCandidate `json:"candidate"`
+		TargetID  string              `json:"target_id"`
+	}
+	var promoted promoteResponse
+	doJSONRequest(t, app.Handler(), http.MethodPost, "/api/discovery/"+strconv.FormatInt(candidateID, 10)+"/promote", "", nil, &promoted)
+	if promoted.TargetID == "" || promoted.Candidate.Status != "promoted" {
+		t.Fatalf("unexpected discovery promote response: %+v", promoted)
+	}
+
+	var target pluginhost.Target
+	doJSONRequest(t, app.Handler(), http.MethodGet, "/api/targets/"+promoted.TargetID, "", nil, &target)
+	if target.Name != "atlas" || target.Hostname != "atlas.local" || len(target.IPs) != 1 || target.IPs[0] != "10.10.10.20" {
+		t.Fatalf("unexpected promoted target: %+v", target)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"insylus/plugins/agent"
 	"insylus/plugins/dashboard"
 	"insylus/plugins/devices"
+	"insylus/plugins/discovery"
 	"insylus/plugins/docker"
 	"insylus/plugins/help"
 	"insylus/plugins/jellyfin"
@@ -24,6 +25,7 @@ func Plugins() []pluginhost.Plugin {
 		agent.New(),
 		dashboard.New(),
 		devices.New(),
+		discovery.New(),
 		docker.New(),
 		help.New(),
 		jellyfin.New(),

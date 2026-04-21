@@ -12,13 +12,13 @@ It describes:
 
 ## Purpose
 
-Insylus is a runtime-configurable plugin control plane. Core Insylus owns plugin settings and neutral targets; enabled plugins add inventory, agent, access, Docker, Proxmox, Jellyfin, services, topology, and wake behavior.
+Insylus is a runtime-configurable plugin control plane. Core Insylus owns plugin settings and neutral targets; enabled plugins add inventory, discovery, agent, access, Docker, Proxmox, Jellyfin, services, topology, and wake behavior.
 
 On the controller host, it provides:
 
 - `/api/plugins` and `insylusctl plugins` for runtime plugin selection
 - `/api/targets` for neutral target lookup
-- optional plugin surfaces such as Devices, Agent, Access, Docker, Proxmox, Jellyfin, Services, Topology, and Wake
+- optional plugin surfaces such as Devices, Discovery, Agent, Access, Docker, Proxmox, Jellyfin, Services, Topology, and Wake
 
 Disabling a plugin gates its already-registered web routes, API routes, and plugin static assets immediately; they return `404` without waiting for a restart. Enabling a plugin that was disabled at startup requires restarting `insylus.service` before its routes and assets are available.
 
@@ -42,6 +42,7 @@ Only when both Agent and Access are enabled can Insylus emit managed-account acc
 - Managed SSH is an Access plugin feature, not a property of every target.
 - Insylus does not provide an interactive shell in the web UI.
 - The web UI landing page `/` is the Dashboard plugin. Device inventory lives at `/devices`.
+- Network discovery lives at `/discovery` when the Discovery plugin is enabled. Discovery results are review candidates, not enrolled agents.
 - To connect, use normal `ssh`.
 - Managed SSH aliases are maintained automatically when SSH sync is installed.
 - Friendly device names may contain uppercase letters, but the preferred SSH alias is lowercase.
@@ -75,6 +76,12 @@ Remote API:
 
 ```bash
 curl http://127.0.0.1:8080/api/devices
+```
+
+Discovery queue:
+
+```bash
+curl http://127.0.0.1:8080/api/discovery
 ```
 
 Single device:

@@ -101,6 +101,7 @@ Suggested role for read-only: `PVEAuditor`. Power actions need `VM.PowerMgmt`.
 
 - `/` — Dashboard: fleet health, service signal, recent events, and quick actions
 - `/devices` — device inventory and targets
+- `/discovery` — manual subnet scan and discovery review queue
 - `/services` — services and prune missing records
 - `/history` — service discovery events
 - `/keys` — SSH key management (Access plugin)

@@ -8,6 +8,7 @@ For an AI-oriented command/reference guide, see [AGENT_GUIDE.md](/opt/insylus/AG
 
 - Go server with SQLite-backed web UI and agent API
 - Go agent with bootstrap, polling, host health/topology reporting, auto-update, and optional policy enforcement
+- Runtime-enableable plugins for discovery, inventory, services, topology, updates, and optional integrations
 - One-liner install flow that downloads the agent, registers the host, and installs a `systemd` service
 - SSH key registry with fingerprinting on the controller host
 
