@@ -30,7 +30,6 @@ func (Plugin) Register(host pluginhost.Host) error {
 		host.Web().Templates(templateFS, "templates/*.html")
 		host.Web().HandleFunc("POST /devices/{id}/policy", rt.handleUpdatePolicy)
 		host.Web().HandleFunc("POST /devices/{id}/mode", rt.handleUpdateDeviceMode)
-		host.Web().HandleFunc("POST /devices/{id}/agent-auto-update", rt.handleUpdateDeviceAgentAutoUpdate)
 		host.Web().HandleFunc("GET /keys", rt.handleKeysPage)
 		host.Web().HandleFunc("POST /keys", rt.handleCreateKey)
 	}

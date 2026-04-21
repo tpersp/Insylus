@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,6 +22,7 @@ type runtime struct {
 	targets                      pluginhost.TargetService
 	render                       func(http.ResponseWriter, string, any)
 	managedAccountConfigProvider shared.ManagedAccountConfigProvider
+	controller                   pluginhost.AgentControllerService
 }
 
 type agentSettingsData struct {
@@ -46,6 +48,23 @@ func (rt runtime) handleUpdateAgentAutoUpdateDefault(w http.ResponseWriter, r *h
 		return
 	}
 	http.Redirect(w, r, "/agent/settings", http.StatusSeeOther)
+}
+
+func (rt runtime) handleUpdateDeviceAgentAutoUpdate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	override := shared.AgentAutoUpdateOverride(strings.TrimSpace(r.FormValue("agent_auto_update_override")))
+	if err := rt.setDeviceAgentAutoUpdateOverride(r.Context(), r.PathValue("id"), override); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	http.Redirect(w, r, "/devices/"+r.PathValue("id"), http.StatusSeeOther)
 }
 
 func (rt runtime) handleInstallPage(w http.ResponseWriter, r *http.Request) {
@@ -147,73 +166,75 @@ func (rt runtime) handlePolicyFetch(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	managed, err := rt.managedAccountConfig(r.Context())
+	if rt.controller == nil {
+		http.Error(w, "agent controller service unavailable", http.StatusInternalServerError)
+		return
+	}
+	device, err := rt.deviceByID(r.Context(), targetID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	managedUser := managed.ManagedUser
-	policy := shared.AgentPolicyResponse{
-		DeviceID:              targetID,
-		DeviceMode:            shared.DeviceModeInventoryOnly,
-		ManagedAccountEnabled: false,
-		AccessMode:            managed.AccessMode,
-		AccountState:          "unmanaged",
-		PolicyRevision:        1,
-		FetchedAt:             time.Now().UTC(),
-		AgentUpdate:           shared.AgentUpdateManifest{Enabled: false, Status: shared.AgentUpdateStatusIdle},
-		ManagedUser:           managedUser,
-		ManagedGroups:         managed.ManagedGroups,
-		SudoersPath:           "/etc/sudoers.d/insylus-" + managedUser,
-		AuditReadmePath:       "/etc/sudoers.d/insylus-" + managedUser + "-audit-readme",
-		AuthorizedKeysPath:    "/home/" + managedUser + "/.ssh/authorized_keys",
+	baseURL := "http://" + r.Host
+	if r.TLS != nil {
+		baseURL = "https://" + r.Host
 	}
-	var enabled int
-	var keyID sql.NullInt64
-	var publicKey, fingerprint string
-	err = rt.db.QueryRowContext(r.Context(), `
-		select coalesce(p.device_mode, 'inventory-only'), p.managed_account_enabled, p.ssh_key_id, coalesce(k.public_key, ''), coalesce(k.fingerprint, ''), p.policy_revision
-		from device_access_policies p
-		left join ssh_keys k on k.id = p.ssh_key_id
-		where p.device_id = ?`, targetID).Scan(&policy.DeviceMode, &enabled, &keyID, &publicKey, &fingerprint, &policy.PolicyRevision)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	policy, err := rt.controller.PolicyForDevice(r.Context(), baseURL, device, r.URL.Query().Get("goos"), r.URL.Query().Get("goarch"))
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
-	}
-	if keyID.Valid {
-		id := keyID.Int64
-		policy.AssignedKeyID = &id
-	}
-	policy.ManagedAccountEnabled = enabled == 1
-	policy.AssignedKey = publicKey
-	policy.KeyFingerprint = fingerprint
-	policy.AccessMode = managed.AccessMode
-	if policy.DeviceMode == shared.DeviceModeInventoryOnly {
-		policy.AccountState = "unmanaged"
-	} else if !policy.ManagedAccountEnabled || policy.AccessMode == shared.AccessModeDisabled {
-		policy.AccountState = "disabled"
-	} else {
-		policy.AccountState = "enabled"
 	}
 	writeJSON(w, http.StatusOK, policy)
 }
 
 func (rt runtime) handleUpdateStatus(w http.ResponseWriter, r *http.Request) {
-	if _, ok := rt.authenticate(w, r); !ok {
+	deviceID, ok := rt.authenticate(w, r)
+	if !ok {
+		return
+	}
+	if rt.controller == nil {
+		http.Error(w, "agent controller service unavailable", http.StatusInternalServerError)
+		return
+	}
+	var report shared.AgentUpdateReport
+	if !decodeJSON(w, r, &report) {
+		return
+	}
+	if err := rt.controller.SaveAgentUpdateStatus(r.Context(), deviceID, report); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "saved"})
 }
 
 func (rt runtime) handleReport(w http.ResponseWriter, r *http.Request) {
-	if _, ok := rt.authenticate(w, r); !ok {
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	token = strings.TrimSpace(token)
+	if token == "" {
+		http.Error(w, "missing bearer token", http.StatusUnauthorized)
+		return
+	}
+	if rt.controller == nil {
+		http.Error(w, "agent controller service unavailable", http.StatusInternalServerError)
+		return
+	}
+	var report shared.DeviceReport
+	if !decodeJSON(w, r, &report) {
+		return
+	}
+	if err := rt.controller.SaveReport(r.Context(), token, report); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "saved"})
 }
 
 func (rt runtime) handleDownload(w http.ResponseWriter, r *http.Request) {
-	path := "/opt/insylus/bin/insylus-agent"
+	path, err := resolveServedAgentBinaryPath(defaultServedAgentBinaryPath(), r.URL.Query().Get("goos"), r.URL.Query().Get("goarch"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
 	if _, err := os.Stat(path); err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -269,6 +290,50 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func (rt runtime) deviceByID(ctx context.Context, deviceID string) (shared.Device, error) {
+	row := rt.db.QueryRowContext(ctx, `
+		select id, name, bootstrap_token, agent_token, hostname, os_name, ips_json, agent_version, last_seen_at, created_at, updated_at
+		from devices where id = ?`, deviceID)
+	var device shared.Device
+	var ipsJSON string
+	var lastSeen, created, updated sql.NullString
+	if err := row.Scan(&device.ID, &device.Name, &device.BootstrapToken, &device.AgentToken, &device.Hostname, &device.OSName, &ipsJSON, &device.AgentVersion, &lastSeen, &created, &updated); err != nil {
+		return shared.Device{}, err
+	}
+	_ = json.Unmarshal([]byte(ipsJSON), &device.IPs)
+	if lastSeen.Valid {
+		device.LastSeenAt, _ = time.Parse(time.RFC3339, lastSeen.String)
+	}
+	if created.Valid {
+		device.CreatedAt, _ = time.Parse(time.RFC3339, created.String)
+	}
+	if updated.Valid {
+		device.UpdatedAt, _ = time.Parse(time.RFC3339, updated.String)
+	}
+	return device, nil
+}
+
+func defaultServedAgentBinaryPath() string {
+	if value := strings.TrimSpace(os.Getenv("INSYLUS_AGENT_BINARY_PATH")); value != "" {
+		return value
+	}
+	return "/opt/insylus/bin/insylus-agent"
+}
+
+func resolveServedAgentBinaryPath(defaultPath, goos, goarch string) (string, error) {
+	goos = strings.TrimSpace(goos)
+	goarch = strings.TrimSpace(goarch)
+	if goos == "" || goarch == "" {
+		return defaultPath, nil
+	}
+	baseDir := filepath.Dir(defaultPath)
+	candidate := filepath.Join(baseDir, "insylus-agent-"+goos+"-"+goarch)
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate, nil
+	}
+	return "", os.ErrNotExist
 }
 
 func defaultManagedUser() string {
@@ -334,6 +399,46 @@ func (rt runtime) setAgentAutoUpdateDefault(ctx context.Context, enabled bool) e
 		update device_agent_updates
 		set effective_enabled = ?, updated_at = ?
 		where auto_update_override = 'inherit'`, boolInt(enabled), now)
+	return err
+}
+
+func (rt runtime) setDeviceAgentAutoUpdateOverride(ctx context.Context, deviceID string, override shared.AgentAutoUpdateOverride) error {
+	if override == "" {
+		override = shared.AgentAutoUpdateInherit
+	}
+	if override != shared.AgentAutoUpdateInherit && override != shared.AgentAutoUpdateEnabled && override != shared.AgentAutoUpdateDisabled {
+		return errors.New("invalid auto-update override")
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	res, err := rt.db.ExecContext(ctx, `
+		update device_agent_updates
+		set auto_update_override = ?, updated_at = ?
+		where device_id = ?`, string(override), now, deviceID)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+	globalEnabled, err := rt.agentAutoUpdateDefault(ctx)
+	if err != nil {
+		return err
+	}
+	effective := globalEnabled
+	switch override {
+	case shared.AgentAutoUpdateEnabled:
+		effective = true
+	case shared.AgentAutoUpdateDisabled:
+		effective = false
+	}
+	_, err = rt.db.ExecContext(ctx, `
+		update device_agent_updates
+		set effective_enabled = ?, updated_at = ?
+		where device_id = ?`, boolInt(effective), now, deviceID)
 	return err
 }
 

@@ -26,6 +26,11 @@ func (Plugin) Register(host pluginhost.Host) error {
 			rt.managedAccountConfigProvider = managed
 		}
 	}
+	if provider, ok := host.Capabilities().Lookup("agent_controller_service"); ok {
+		if controller, ok := provider.(pluginhost.AgentControllerService); ok {
+			rt.controller = controller
+		}
+	}
 	if host.Web().Enabled() {
 		templateFS, err := fs.Sub(templateFiles, ".")
 		if err != nil {
@@ -35,6 +40,7 @@ func (Plugin) Register(host pluginhost.Host) error {
 		host.Web().Templates(templateFS, "templates/*.html")
 		host.Web().HandleFunc("GET /agent/settings", rt.handleAgentSettingsPage)
 		host.Web().HandleFunc("POST /agent/settings/auto-update", rt.handleUpdateAgentAutoUpdateDefault)
+		host.Web().HandleFunc("POST /devices/{id}/agent-auto-update", rt.handleUpdateDeviceAgentAutoUpdate)
 		host.Web().HandleFunc("GET /install.sh", rt.handleInstallScript)
 	}
 	if host.API().Enabled() {
