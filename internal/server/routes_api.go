@@ -80,31 +80,6 @@ func (a *App) handlePolicyFetch(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, policy)
 }
 
-func (a *App) withManagedAccountPolicy(ctx context.Context, policy shared.AgentPolicyResponse) (shared.AgentPolicyResponse, error) {
-	cfg, err := a.ManagedAccountConfig(ctx)
-	if err != nil {
-		return policy, err
-	}
-	user := cfg.ManagedUser
-	policy.ManagedUser = user
-	if policy.AccessMode == "" || policy.DeviceMode == shared.DeviceModeInventoryOnly {
-		policy.AccessMode = cfg.AccessMode
-	}
-	policy.ManagedGroups = managedGroupsForAccessMode(policy.AccessMode, cfg.ManagedGroups)
-	policy.SudoersPath = "/etc/sudoers.d/insylus-" + user
-	policy.AuditReadmePath = "/etc/sudoers.d/insylus-" + user + "-audit-readme"
-	policy.AuthorizedKeysPath = "/home/" + user + "/.ssh/authorized_keys"
-	switch {
-	case policy.DeviceMode == shared.DeviceModeInventoryOnly:
-		policy.AccountState = "unmanaged"
-	case !policy.ManagedAccountEnabled || policy.AccessMode == shared.AccessModeDisabled:
-		policy.AccountState = "disabled"
-	default:
-		policy.AccountState = "enabled"
-	}
-	return policy, nil
-}
-
 func (a *App) ManagedAccountConfig(ctx context.Context) (shared.ManagedAccountConfig, error) {
 	return a.store.ManagedAccountConfig(ctx, shared.ManagedAccountConfig{
 		ManagedUser:   a.configuredManagedUser(),
@@ -471,17 +446,6 @@ func (a *App) agentUpdateManifest(r *http.Request, device shared.Device) (shared
 		return manifest, err
 	}
 	return manifest, nil
-}
-
-func effectiveAgentAutoUpdate(globalEnabled bool, override shared.AgentAutoUpdateOverride) bool {
-	switch override {
-	case shared.AgentAutoUpdateEnabled:
-		return true
-	case shared.AgentAutoUpdateDisabled:
-		return false
-	default:
-		return globalEnabled
-	}
 }
 
 func compareVersions(a, b string) int {
