@@ -1,0 +1,157 @@
+{{ define "monitor.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Network Monitor</title>
+  {{ template "head-assets" . }}
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page">
+    <div class="page-title">
+      <div>
+        <p class="eyebrow">Status</p>
+        <h2>Network Monitor</h2>
+        <div class="title-meta">
+          <span>Active checks for Insylus devices and extra endpoints</span>
+          <span>Interval {{ .Settings.IntervalSeconds }}s</span>
+          <span>Timeout {{ .Settings.TimeoutMillis }}ms</span>
+        </div>
+      </div>
+      <div class="title-actions">
+        <form method="post" action="/monitor/check" class="inline-form">
+          <button type="submit">Check now</button>
+        </form>
+        <a class="button-link" href="/api/monitor">JSON</a>
+      </div>
+    </div>
+
+    <section class="stat-grid">
+      <div class="stat-card">
+        <span class="stat-label">Up</span>
+        <strong>{{ .UpCount }}</strong>
+        <span class="subtle">responding now</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Down</span>
+        <strong>{{ .DownCount }}</strong>
+        <span class="subtle">last probe failed</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Unknown</span>
+        <strong>{{ .UnknownCount }}</strong>
+        <span class="subtle">no checks yet or paused</span>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Settings</p>
+            <h2>Check Schedule</h2>
+          </div>
+        </div>
+        <form method="post" action="/monitor/settings" class="quick-add">
+          <label>Interval seconds
+            <input type="number" min="30" name="interval_seconds" value="{{ .Settings.IntervalSeconds }}" required>
+          </label>
+          <label>Timeout milliseconds
+            <input type="number" min="250" name="timeout_millis" value="{{ .Settings.TimeoutMillis }}" required>
+          </label>
+          <button type="submit">Save settings</button>
+        </form>
+        <p class="muted">Device targets use ping. Manual targets can use ping or TCP if you add a port.</p>
+      </div>
+
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Manual Targets</p>
+            <h2>Add Endpoint</h2>
+          </div>
+        </div>
+        <form method="post" action="/monitor/targets" class="quick-add">
+          <label>Name
+            <input type="text" name="name" placeholder="NAS uplink" required>
+          </label>
+          <label>Host or IP
+            <input type="text" name="host" placeholder="192.168.0.20" required>
+          </label>
+          <label>Port
+            <input type="number" min="0" max="65535" name="port" placeholder="443">
+          </label>
+          <button type="submit">Add target</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Fleet</p>
+          <h2>Status Grid</h2>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="device-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Target</th>
+              <th>State</th>
+              <th>Latency</th>
+              <th>Availability</th>
+              <th>Last checked</th>
+              <th>Trend</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {{ range .Statuses }}
+            <tr>
+              <td>
+                <strong>{{ .Name }}</strong>
+                <div class="muted">{{ .Source }}</div>
+              </td>
+              <td>
+                <code>{{ .Host }}</code>{{ if .Port }}:{{ .Port }}{{ end }}
+                <div class="muted">{{ .MonitorMethod }}</div>
+              </td>
+              <td>
+                <span class="pill {{ if eq .State "up" }}pill-ok{{ else if eq .State "down" }}pill-danger{{ else if eq .State "paused" }}pill-muted{{ else }}pill-warn{{ end }}">{{ .State }}</span>
+                {{ if .LastError }}<div class="muted monitor-error">{{ .LastError }}</div>{{ end }}
+              </td>
+              <td>{{ if .LatencyMs }}{{ printf "%.1f ms" .LatencyMs }}{{ else }}<span class="muted">-</span>{{ end }}</td>
+              <td>{{ printf "%.1f%%" .Availability24h }}<div class="muted">{{ .Successes24h }}/{{ .Samples24h }} samples</div></td>
+              <td>{{ formatTime .LastCheckedAt }}</td>
+              <td>
+                <div class="monitor-sparkline" data-key="{{ .Key }}" data-window="1h"></div>
+              </td>
+              <td class="monitor-actions">
+                {{ if eq .Source "device" }}
+                <a class="button-secondary compact-button" href="/devices/{{ .DeviceID }}">Open device</a>
+                {{ else if .ManualTargetID }}
+                <form method="post" action="/monitor/targets/{{ .ManualTargetID }}/delete" class="inline-form" onsubmit="return confirm('Delete this manual monitor target?');">
+                  <button type="submit" class="button-secondary compact-button">Delete</button>
+                </form>
+                {{ end }}
+              </td>
+            </tr>
+            {{ else }}
+            <tr><td colspan="8" class="muted">No monitor targets yet.</td></tr>
+            {{ end }}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script>
+    window.MONITOR_API = { historyBase: '/api/monitor/' };
+  </script>
+  <script src="/plugin-assets/monitor/monitor.js" defer></script>
+</body>
+</html>
+{{ end }}

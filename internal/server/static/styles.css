@@ -1110,6 +1110,44 @@ pre {
   flex: 0 0 auto;
 }
 
+.monitor-sparkline {
+  min-width: 140px;
+  min-height: 34px;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
+.monitor-sparkline svg {
+  display: block;
+  width: 140px;
+  height: 34px;
+}
+
+.monitor-sparkline-base {
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 1;
+}
+
+.monitor-sparkline-line {
+  fill: none;
+  stroke: #67d391;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.monitor-sparkline-fail {
+  fill: #ff7a7a;
+}
+
+.monitor-error {
+  max-width: 22rem;
+}
+
+.monitor-actions {
+  white-space: nowrap;
+}
+
 @media (max-width: 1100px) {
   .metric-grid,
   .stat-grid {

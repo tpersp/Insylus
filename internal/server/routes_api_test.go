@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -147,6 +148,63 @@ func TestPluginEnableActivatesRoutesWithoutRestart(t *testing.T) {
 	}
 	if status := responseStatus(handler, http.MethodGet, "/api/discovery", nil); status != http.StatusOK {
 		t.Fatalf("GET /api/discovery after enable status = %d, want 200", status)
+	}
+}
+
+func TestMonitorPluginManualTargetAndHistoryAPI(t *testing.T) {
+	app := newTestAppWithEnabledPlugins(t, Config{
+		DBPath: filepath.Join(t.TempDir(), "insylus.db"),
+	}, "monitor")
+	defer app.Close()
+
+	probeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer probeServer.Close()
+
+	u, err := url.Parse(probeServer.URL)
+	if err != nil {
+		t.Fatalf("url.Parse probe server: %v", err)
+	}
+	host, portText, err := net.SplitHostPort(u.Host)
+	if err != nil {
+		t.Fatalf("SplitHostPort probe host: %v", err)
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil {
+		t.Fatalf("Atoi probe port: %v", err)
+	}
+
+	doJSONRequest(t, app.Handler(), http.MethodPost, "/api/monitor/targets", "", map[string]any{
+		"name":    "Loopback HTTP",
+		"host":    host,
+		"port":    port,
+		"enabled": true,
+	}, nil)
+	doJSONRequest(t, app.Handler(), http.MethodPost, "/api/monitor/check", "", nil, nil)
+
+	var statuses []map[string]any
+	doJSONRequest(t, app.Handler(), http.MethodGet, "/api/monitor", "", nil, &statuses)
+	if len(statuses) == 0 {
+		t.Fatalf("expected monitor statuses")
+	}
+
+	var targetKey string
+	for _, status := range statuses {
+		if status["name"] == "Loopback HTTP" {
+			targetKey, _ = status["key"].(string)
+			break
+		}
+	}
+	if targetKey == "" {
+		t.Fatalf("manual monitor target missing from status list: %+v", statuses)
+	}
+
+	var history map[string]any
+	doJSONRequest(t, app.Handler(), http.MethodGet, "/api/monitor/"+targetKey+"/history?window=1h", "", nil, &history)
+	points, _ := history["points"].([]any)
+	if len(points) == 0 {
+		t.Fatalf("expected monitor history points, got %+v", history)
 	}
 }
 

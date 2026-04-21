@@ -102,6 +102,7 @@ Suggested role for read-only: `PVEAuditor`. Power actions need `VM.PowerMgmt`.
 - `/` — Dashboard: fleet health, service signal, recent events, and quick actions
 - `/devices` — device inventory and targets
 - `/discovery` — manual subnet scan and discovery review queue
+- `/monitor` — active device and endpoint reachability checks
 - `/services` — services and prune missing records
 - `/history` — service discovery events
 - `/keys` — SSH key management (Access plugin)
@@ -172,6 +173,34 @@ POST /api/discovery/<candidate-id>/status
 ### Web UI
 
 - `/discovery` — manual subnet scan and discovery review queue
+
+## Monitor plugin
+
+The Monitor plugin adds active reachability checks for enrolled devices and arbitrary manual endpoints.
+
+### Rules
+
+- `insylusctl monitor` lists current monitor targets and states.
+- `insylusctl monitor --status TARGET` resolves by key, device ID, name, or host.
+- `insylusctl monitor --history TARGET --window 30m|1h|24h` returns recent samples.
+- Enrolled devices are checked with ping against the best-known address.
+- Manual targets use ping unless a TCP port is configured.
+- The web page includes recent latency sparklines and 24-hour availability.
+
+### API endpoints
+
+```bash
+GET  /api/monitor
+GET  /api/monitor/<target-key>/history?window=1h
+POST /api/monitor/check
+POST /api/monitor/settings
+POST /api/monitor/targets
+POST /api/monitor/targets/<id>/delete
+```
+
+### Web UI
+
+- `/monitor` — active device and endpoint reachability checks
 
 ## Devices plugin
 

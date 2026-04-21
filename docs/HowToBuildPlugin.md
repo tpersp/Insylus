@@ -848,6 +848,7 @@ Current top-level plugins:
 - `plugins/docker`: Docker CLI, `/docker`, `/docker/devices/{target_id}`, and `/api/docker*`.
 - `plugins/help`: CLI help and CLI plugin list commands.
 - `plugins/jellyfin`: Jellyfin CLI, `/jellyfin`, and `/api/jellyfin*`.
+- `plugins/monitor`: monitor CLI, `/monitor`, and `/api/monitor*`.
 - `plugins/proxmox`: Proxmox CLI, `/api/proxmox*`, `/proxmox` token setup page, and user-provided token storage.
 - `plugins/services`: services CLI, `/api/services*`, services and history web pages.
 - `plugins/topology`: web-only topology page, topology edit routes, `/topology/graph`, and topology assets.

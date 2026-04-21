@@ -8,7 +8,7 @@ For an AI-oriented command/reference guide, see [AGENT_GUIDE.md](/opt/insylus/AG
 
 - Go server with SQLite-backed web UI and agent API
 - Go agent with bootstrap, polling, host health/topology reporting, auto-update, and optional policy enforcement
-- Runtime-enableable plugins for discovery, inventory, services, topology, updates, and optional integrations
+- Runtime-enableable plugins for discovery, monitoring, inventory, services, topology, updates, and optional integrations
 - One-liner install flow that downloads the agent, registers the host, and installs a `systemd` service
 - SSH key registry with fingerprinting on the controller host
 
@@ -307,6 +307,23 @@ Notes:
 - hostname is best-effort from reverse DNS
 - MAC is only available when the controller can learn it on the local network
 - `known` entries are already in inventory and should not be promoted again
+
+Monitor is available as both web UI and CLI:
+
+```bash
+insylusctl monitor
+insylusctl monitor --status MiscServer
+insylusctl monitor --history MiscServer --window 1h
+curl http://127.0.0.1:8080/api/monitor
+```
+
+The Monitor plugin provides active reachability checks at `/monitor`:
+
+- enrolled devices are checked automatically by ping using their best-known address
+- manual endpoints can be added for arbitrary IPs or hostnames
+- manual targets use ping by default, or TCP if you provide a port
+- availability is calculated from the stored rolling history window
+- latency sparklines on the page show the recent shape of checks at a glance
 
 If your current shell says `command not found` right after installation, refresh the shell command cache once:
 

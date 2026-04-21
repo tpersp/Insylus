@@ -12,13 +12,13 @@ It describes:
 
 ## Purpose
 
-Insylus is a runtime-configurable plugin control plane. Core Insylus owns plugin settings and neutral targets; enabled plugins add inventory, discovery, agent, access, Docker, Proxmox, Jellyfin, services, topology, and wake behavior.
+Insylus is a runtime-configurable plugin control plane. Core Insylus owns plugin settings and neutral targets; enabled plugins add inventory, discovery, monitoring, agent, access, Docker, Proxmox, Jellyfin, services, topology, and wake behavior.
 
 On the controller host, it provides:
 
 - `/api/plugins` and `insylusctl plugins` for runtime plugin selection
 - `/api/targets` for neutral target lookup
-- optional plugin surfaces such as Devices, Discovery, Agent, Access, Docker, Proxmox, Jellyfin, Services, Topology, and Wake
+- optional plugin surfaces such as Devices, Discovery, Monitor, Agent, Access, Docker, Proxmox, Jellyfin, Services, Topology, and Wake
 
 Disabling a plugin gates its web routes, API routes, navigation items, and plugin static assets immediately; they return `404` or disappear from navigation without waiting for a restart. Enabling a compiled plugin also makes its surfaces available immediately.
 
@@ -85,6 +85,13 @@ curl http://127.0.0.1:8080/api/discovery
 ```
 
 There is currently no dedicated `insylusctl discovery` command. Discovery is a web/API-only workflow.
+
+Monitor:
+
+```bash
+insylusctl monitor
+curl http://127.0.0.1:8080/api/monitor
+```
 
 Single device:
 
