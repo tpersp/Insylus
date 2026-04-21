@@ -16,6 +16,11 @@
           <p class="eyebrow">Summary</p>
           <h2>Services</h2>
         </div>
+        <div class="section-actions">
+          <a class="button-secondary" href="/api/services?view=compact">Compact JSON</a>
+          <a class="button-secondary" href="/api/services?view=info">Info JSON</a>
+          <a class="button-secondary" href="/api/services?view=full">Full JSON</a>
+        </div>
       </div>
       <form method="get" action="/services" class="quick-add">
         <label>Find service <input type="search" name="q" value="{{ .Query }}" placeholder="jellyfin, postgres, image name"></label>

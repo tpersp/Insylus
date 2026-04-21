@@ -113,6 +113,8 @@
               <td>
                 {{ if .HasToken }}
                 <button type="button" class="button-secondary compact-button" data-proxmox-action="load" data-device-id="{{ .DeviceID }}">Guests</button>
+                <button type="button" class="button-secondary compact-button" data-proxmox-action="vms" data-device-id="{{ .DeviceID }}">VMs</button>
+                <button type="button" class="button-secondary compact-button" data-proxmox-action="lxcs" data-device-id="{{ .DeviceID }}">LXCs</button>
                 <button type="button" class="button-secondary compact-button" data-proxmox-action="node-status" data-device-id="{{ .DeviceID }}">Node</button>
                 <button type="button" class="button-secondary compact-button" data-proxmox-action="cluster-status" data-device-id="{{ .DeviceID }}">Cluster</button>
                 {{ else }}
@@ -148,6 +150,8 @@
           const action = button.dataset.proxmoxAction;
           const id = button.dataset.deviceId;
           if (action === 'load') loadGuests(id);
+          if (action === 'vms') loadGuestsByKind(id, 'vms');
+          if (action === 'lxcs') loadGuestsByKind(id, 'lxcs');
           if (action === 'node-status') loadNodeStatus(id);
           if (action === 'cluster-status') loadClusterStatus(id);
         });
@@ -169,7 +173,34 @@
           outputEl.querySelectorAll('[data-guest-action]').forEach(button => {
             button.addEventListener('click', () => runGuestAction(button.dataset.deviceId, button.dataset.guestAction, button.dataset.target));
           });
+          outputEl.querySelectorAll('[data-guest-status]').forEach(button => {
+            button.addEventListener('click', () => loadGuestStatus(button.dataset.deviceId, button.dataset.target));
+          });
           setStatus('Loaded ' + guests.length + ' guests');
+        } catch (err) {
+          setError(err);
+        }
+      }
+
+      async function loadGuestsByKind(deviceID, kind) {
+        setStatus('Loading ' + kind + '...');
+        try {
+          const guests = await fetchJSON('/api/proxmox/' + encodeURIComponent(deviceID) + '/' + kind);
+          if (!guests.length) {
+            outputEl.innerHTML = '<p class="muted">No ' + escapeHTML(kind) + ' returned.</p>';
+            setStatus('Loaded');
+            return;
+          }
+          outputEl.innerHTML = '<div class="table-wrap"><table class="device-table"><thead><tr><th>VMID</th><th>Name</th><th>Type</th><th>Status</th><th>Memory</th><th>Actions</th></tr></thead><tbody>' +
+            guests.map(g => '<tr><td><code>' + escapeHTML(g.vmid) + '</code></td><td><strong>' + escapeHTML(g.name || '-') + '</strong></td><td>' + escapeHTML(g.type || '-') + '</td><td><span class="pill ' + (g.status === 'running' ? 'pill-ok' : 'pill-muted') + '">' + escapeHTML(g.status || '-') + '</span></td><td>' + formatBytes(g.memory || 0) + ' / ' + formatBytes(g.max_memory || 0) + '</td><td>' + guestButtons(deviceID, g) + '</td></tr>').join('') +
+            '</tbody></table></div>';
+          outputEl.querySelectorAll('[data-guest-action]').forEach(button => {
+            button.addEventListener('click', () => runGuestAction(button.dataset.deviceId, button.dataset.guestAction, button.dataset.target));
+          });
+          outputEl.querySelectorAll('[data-guest-status]').forEach(button => {
+            button.addEventListener('click', () => loadGuestStatus(button.dataset.deviceId, button.dataset.target));
+          });
+          setStatus('Loaded ' + guests.length + ' ' + kind);
         } catch (err) {
           setError(err);
         }
@@ -216,12 +247,33 @@
         }
       }
 
+      async function loadGuestStatus(deviceID, target) {
+        setStatus('Loading guest status...');
+        try {
+          const g = await fetchJSON('/api/proxmox/' + encodeURIComponent(deviceID) + '/status/' + encodeURIComponent(target));
+          outputEl.innerHTML = '<div class="facts">' +
+            '<p><span>Name</span><strong>' + escapeHTML(g.name || target) + '</strong></p>' +
+            '<p><span>VMID</span><code>' + escapeHTML(g.vmid) + '</code></p>' +
+            '<p><span>Type</span>' + escapeHTML(g.type || '-') + '</p>' +
+            '<p><span>Status</span>' + escapeHTML(g.status || '-') + '</p>' +
+            '<p><span>Node</span>' + escapeHTML(g.node || '-') + '</p>' +
+            '<p><span>CPU</span>' + escapeHTML(percent(g.cpu)) + '</p>' +
+            '<p><span>Memory</span>' + formatBytes(g.memory || 0) + ' / ' + formatBytes(g.max_memory || 0) + '</p>' +
+            '<p><span>Uptime</span>' + escapeHTML(g.uptime || '-') + '</p>' +
+            '</div>';
+          setStatus('Guest status loaded');
+        } catch (err) {
+          setError(err);
+        }
+      }
+
       function guestButtons(deviceID, guest) {
         const target = guest.name || String(guest.vmid);
+        const status = '<button type="button" class="button-secondary compact-button" data-guest-status="1" data-device-id="' + escapeHTML(deviceID) + '" data-target="' + escapeHTML(target) + '">Status</button>';
         const start = '<button type="button" class="button-secondary compact-button" data-guest-action="start" data-device-id="' + escapeHTML(deviceID) + '" data-target="' + escapeHTML(target) + '">Start</button>';
         const stop = '<button type="button" class="button-secondary compact-button" data-guest-action="stop" data-device-id="' + escapeHTML(deviceID) + '" data-target="' + escapeHTML(target) + '">Stop</button>';
         const restart = '<button type="button" class="button-secondary compact-button" data-guest-action="restart" data-device-id="' + escapeHTML(deviceID) + '" data-target="' + escapeHTML(target) + '">Restart</button>';
-        return guest.status === 'running' ? stop + ' ' + restart : start;
+        return guest.status === 'running' ? status + ' ' + stop + ' ' + restart : status + ' ' + start;
       }
 
       async function fetchJSON(url, opts) {

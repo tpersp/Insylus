@@ -9,6 +9,7 @@
   const releaseNotesEl = document.getElementById('release-notes');
   const updateStatusEl = document.getElementById('update-status');
   const autoUpdateToggle = document.getElementById('auto-update-toggle');
+  const historyBody = document.getElementById('update-history-body');
 
   let latestInfo = null;
 
@@ -20,6 +21,9 @@
     autoUpdateToggle.addEventListener('change', function() {
       toggleAutoUpdate(autoUpdateToggle.checked);
     });
+  }
+  if (historyBody && api.history) {
+    loadHistory();
   }
 
   async function checkForUpdates() {
@@ -98,6 +102,7 @@
       const result = await resp.json();
 
       updateStatusEl.innerHTML = '<div class="alert alert-info">' + escapeHTML(result.message) + ' This page will refresh automatically.</div>';
+      loadHistory();
 
       // Poll for status changes and refresh
       setTimeout(function() {
@@ -134,6 +139,7 @@
     try {
       const resp = await fetch(api.rollback + '/' + id, { method: 'POST' });
       if (!resp.ok) throw new Error('Failed to rollback');
+      await loadHistory();
       location.reload();
     } catch (e) {
       alert('Rollback failed: ' + e.message);
@@ -152,6 +158,40 @@
       alert('Failed to update auto-update setting: ' + e.message);
       autoUpdateToggle.checked = !enabled;
     }
+  }
+
+  async function loadHistory() {
+    try {
+      const resp = await fetch(api.history);
+      if (!resp.ok) throw new Error('Failed to load update history');
+      const rows = await resp.json();
+      renderHistory(rows || []);
+    } catch (e) {
+      if (historyBody) {
+        historyBody.innerHTML = '<tr><td colspan="5" class="muted">Failed to load update history: ' + escapeHTML(e.message) + '</td></tr>';
+      }
+    }
+  }
+
+  function renderHistory(rows) {
+    if (!historyBody) return;
+    if (!rows.length) {
+      historyBody.innerHTML = '<tr><td colspan="5" class="muted">No update history yet.</td></tr>';
+      return;
+    }
+    historyBody.innerHTML = rows.map(function(row) {
+      const statusClass = row.status === 'applied' ? 'pill-ok' : row.status === 'failed' ? 'pill-error' : 'pill-muted';
+      const rollback = (row.status === 'applied' || row.status === 'failed')
+        ? '<button type="button" class="button-secondary compact-button" onclick="rollbackUpdate(' + row.id + ')">Rollback</button>'
+        : '';
+      return '<tr>' +
+        '<td><code>' + escapeHTML(row.version) + '</code></td>' +
+        '<td><span class="pill ' + statusClass + '">' + escapeHTML(row.status) + '</span></td>' +
+        '<td>' + escapeHTML(row.applied_at || '-') + '</td>' +
+        '<td>' + escapeHTML(row.notes || '-') + '</td>' +
+        '<td>' + rollback + '</td>' +
+        '</tr>';
+    }).join('');
   }
 
   function escapeHTML(s) {

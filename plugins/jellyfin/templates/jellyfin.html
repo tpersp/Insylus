@@ -118,6 +118,7 @@
                 <button type="button" class="button-secondary compact-button" data-jellyfin-view="resume" data-device-id="{{ .DeviceID }}">Resume</button>
                 <button type="button" class="button-secondary compact-button" data-jellyfin-view="movies" data-device-id="{{ .DeviceID }}">Movies</button>
                 <button type="button" class="button-secondary compact-button" data-jellyfin-view="series" data-device-id="{{ .DeviceID }}">Series</button>
+                <button type="button" class="button-secondary compact-button" data-jellyfin-view="episodes" data-device-id="{{ .DeviceID }}">Episodes</button>
                 {{ else }}
                 <span class="muted">-</span>
                 {{ end }}
@@ -138,6 +139,11 @@
           <h2>Jellyfin Browser</h2>
         </div>
       </div>
+      <form class="quick-add" onsubmit="return false;">
+        <label>User override
+          <input type="text" id="jellyfin-user-id" placeholder="optional user ID or username">
+        </label>
+      </form>
       <div id="jellyfin-status" class="muted">Choose a configured server.</div>
       <div id="jellyfin-output"></div>
     </section>
@@ -146,6 +152,7 @@
     (function() {
       const statusEl = document.getElementById('jellyfin-status');
       const outputEl = document.getElementById('jellyfin-output');
+      const userInput = document.getElementById('jellyfin-user-id');
       document.querySelectorAll('[data-jellyfin-view]').forEach(button => {
         button.addEventListener('click', () => loadView(button.dataset.deviceId, button.dataset.jellyfinView));
       });
@@ -154,14 +161,15 @@
         setStatus('Loading ' + view + '...');
         try {
           let data;
+          const userQuery = currentUserQuery();
           if (view === 'libraries') {
             data = await fetchJSON('/api/jellyfin/' + encodeURIComponent(deviceID) + '/libraries');
             renderLibraries(deviceID, data || []);
           } else if (view === 'resume') {
-            data = await fetchJSON('/api/jellyfin/' + encodeURIComponent(deviceID) + '/resume');
+            data = await fetchJSON('/api/jellyfin/' + encodeURIComponent(deviceID) + '/resume' + userQuery);
             renderProgress(data || []);
           } else {
-            data = await fetchJSON('/api/jellyfin/' + encodeURIComponent(deviceID) + '/' + view);
+            data = await fetchJSON('/api/jellyfin/' + encodeURIComponent(deviceID) + '/' + view + userQuery);
             renderItems(deviceID, data || []);
           }
           setStatus('Loaded ' + view);
@@ -186,7 +194,8 @@
       async function loadLibraryItems(deviceID, parentID) {
         setStatus('Loading library items...');
         try {
-          const items = await fetchJSON('/api/jellyfin/' + encodeURIComponent(deviceID) + '/items?parentId=' + encodeURIComponent(parentID));
+          const base = '/api/jellyfin/' + encodeURIComponent(deviceID) + '/items?parentId=' + encodeURIComponent(parentID);
+          const items = await fetchJSON(base + currentUserQuery('&'));
           renderItems(deviceID, items || []);
           setStatus('Library items loaded');
         } catch (err) {
@@ -243,6 +252,11 @@
       function setError(err) {
         statusEl.textContent = 'Error';
         outputEl.innerHTML = '<p class="muted">' + escapeHTML(err.message) + '</p>';
+      }
+      function currentUserQuery(prefix) {
+        const value = userInput && userInput.value ? userInput.value.trim() : '';
+        if (!value) return '';
+        return (prefix || '?') + 'userId=' + encodeURIComponent(value);
       }
       function formatRuntime(ticks) {
         const seconds = Math.floor((Number(ticks) || 0) / 10000000);

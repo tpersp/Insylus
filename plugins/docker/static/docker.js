@@ -20,6 +20,8 @@
   const imagesBody = document.getElementById('images-body');
   const showAllToggle = document.getElementById('show-all-toggle');
   const detailPanel = document.getElementById('container-detail-panel');
+  const logTailInput = document.getElementById('docker-log-tail');
+  const logTimestampsInput = document.getElementById('docker-log-timestamps');
 
   if (containersBody) {
     loadContainers(deviceId);
@@ -261,7 +263,9 @@
   async function showContainerLogs(deviceId, name) {
     const encName = encodeURIComponent(name);
     try {
-      const resp = await fetch('/api/docker/containers/' + encodeURIComponent(deviceId) + '/' + encName + '/logs?tail=200&timestamps=true');
+      const tail = logTailInput && logTailInput.value ? encodeURIComponent(logTailInput.value) : '200';
+      const timestamps = logTimestampsInput && logTimestampsInput.checked ? 'true' : 'false';
+      const resp = await fetch('/api/docker/containers/' + encodeURIComponent(deviceId) + '/' + encName + '/logs?tail=' + tail + '&timestamps=' + timestamps);
       if (!resp.ok) throw new Error('Failed to load logs');
       const rows = await resp.json();
       const html = '<h3>' + escapeHTML(name) + ' logs</h3><pre class="log-output">' + escapeHTML((rows || []).map(function(row) {
