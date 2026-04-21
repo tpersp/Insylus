@@ -74,6 +74,27 @@ func (Plugin) Register(host pluginhost.Host) error {
 		host.API().HandleFunc("GET /api/devices", rt.handleTargetsAPI)
 		host.API().HandleFunc("GET /api/devices/find", rt.handleTargetFindAPI)
 		host.API().HandleFunc("GET /api/devices/{id}", rt.handleTargetAPI)
+		host.API().HandleFunc("GET /api/devices/{id}/health-history", rt.handleHealthHistoryAPI)
+	}
+	if host.Migrations().Enabled() {
+		host.Migrations().Add(pluginhost.Migration{
+			PluginID: "devices",
+			Version:  1,
+			Name:     "create device health samples table",
+			SQL: `
+create table if not exists device_health_samples (
+    device_id text not null references devices(id) on delete cascade,
+    recorded_at text not null,
+    load_average_1 real not null default 0,
+    memory_used_pct real not null default 0,
+    disk_used_pct real not null default 0,
+    uptime_seconds real not null default 0,
+    primary key(device_id, recorded_at)
+);
+create index if not exists device_health_samples_device_time_idx
+    on device_health_samples(device_id, recorded_at);
+`,
+		})
 	}
 	return nil
 }

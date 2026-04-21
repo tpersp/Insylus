@@ -576,6 +576,114 @@ button:disabled {
   font-weight: 850;
 }
 
+.health-history {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.health-history-toolbar,
+.health-history-actions,
+.health-history-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.health-history-toolbar {
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.health-history-toolbar .muted {
+  margin: 0.2rem 0 0;
+  max-width: 34rem;
+}
+
+.health-history-window.is-active {
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(240, 180, 41, 0.12);
+}
+
+.health-history-legend {
+  margin-bottom: 0.65rem;
+  color: var(--text-soft);
+}
+
+.health-history-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.health-history-legend strong {
+  color: var(--text);
+}
+
+.health-line {
+  display: inline-block;
+  width: 1.2rem;
+  height: 0.2rem;
+  border-radius: 999px;
+}
+
+.health-line.load,
+.health-series.load {
+  color: #7dd3fc;
+  stroke: #7dd3fc;
+  background: #7dd3fc;
+}
+
+.health-line.memory,
+.health-series.memory {
+  color: #67d391;
+  stroke: #67d391;
+  background: #67d391;
+}
+
+.health-line.disk,
+.health-series.disk {
+  color: #f0b429;
+  stroke: #f0b429;
+  background: #f0b429;
+}
+
+.health-history-status {
+  min-height: 1.2rem;
+  margin-bottom: 0.35rem;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.health-history-chart {
+  width: 100%;
+  height: 240px;
+  display: block;
+}
+
+.health-chart-bg {
+  fill: var(--bg-elevated);
+  stroke: var(--line);
+}
+
+.health-grid {
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-dasharray: 4 6;
+}
+
+.health-axis {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.health-series {
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .note {
   white-space: pre-wrap;
   line-height: 1.55;

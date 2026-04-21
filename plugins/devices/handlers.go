@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"insylus/internal/pluginhost"
 	"insylus/internal/shared"
@@ -35,6 +36,7 @@ type targetPageData struct {
 	Keys         []shared.SSHKey
 	ManagedUser  string
 	Plugins      enabledPlugins
+	HealthWindow string
 }
 
 func (rt runtime) handleTargetsPage(w http.ResponseWriter, r *http.Request) {
@@ -296,6 +298,56 @@ func (rt runtime) handleTargetAPI(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, item)
 }
 
+func (rt runtime) handleHealthHistoryAPI(w http.ResponseWriter, r *http.Request) {
+	window, err := healthHistoryWindow(r.URL.Query().Get("window"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if _, err := rt.targets.Get(r.Context(), r.PathValue("id")); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	cutoff := time.Now().UTC().Add(-window).Format(time.RFC3339)
+	rows, err := rt.db.QueryContext(r.Context(), `
+		select recorded_at, load_average_1, memory_used_pct, disk_used_pct, uptime_seconds
+		from device_health_samples
+		where device_id = ? and recorded_at >= ?
+		order by recorded_at asc`, r.PathValue("id"), cutoff)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	resp := shared.DeviceHealthHistory{
+		DeviceID: r.PathValue("id"),
+		Window:   strings.TrimSpace(r.URL.Query().Get("window")),
+	}
+	if resp.Window == "" {
+		resp.Window = "1h"
+	}
+	for rows.Next() {
+		var sample shared.DeviceHealthSample
+		var recordedAt string
+		if err := rows.Scan(&recordedAt, &sample.LoadAverage1, &sample.MemoryUsedPct, &sample.DiskUsedPct, &sample.UptimeSeconds); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		sample.RecordedAt, _ = time.Parse(time.RFC3339, recordedAt)
+		resp.Samples = append(resp.Samples, sample)
+	}
+	if err := rows.Err(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 func (rt runtime) managedUser(ctx context.Context) (string, error) {
 	if rt.managed == nil {
 		return shared.DefaultManagedUser, nil
@@ -312,7 +364,8 @@ func (rt runtime) managedUser(ctx context.Context) (string, error) {
 
 func (rt runtime) targetPageData(ctx context.Context, target pluginhost.Target) (targetPageData, error) {
 	data := targetPageData{
-		Target: target,
+		Target:       target,
+		HealthWindow: "1h",
 		Plugins: enabledPlugins{
 			Access: rt.plugins.Enabled("access"),
 			Agent:  rt.plugins.Enabled("agent"),
@@ -350,6 +403,17 @@ func (rt runtime) targetPageData(ctx context.Context, target pluginhost.Target) 
 		data.Inventory = &inv
 	}
 	return data, nil
+}
+
+func healthHistoryWindow(raw string) (time.Duration, error) {
+	switch strings.TrimSpace(raw) {
+	case "", "1h":
+		return time.Hour, nil
+	case "30m":
+		return 30 * time.Minute, nil
+	default:
+		return 0, errors.New("invalid health history window")
+	}
 }
 
 func (rt runtime) updateTargetNoteOnly(ctx context.Context, targetID, note string) error {

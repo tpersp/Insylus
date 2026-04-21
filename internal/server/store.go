@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -314,6 +315,17 @@ func (s *Store) migrate(ctx context.Context) error {
 			health_json text not null default '{}',
 			updated_at text not null
 		);`,
+		`create table if not exists device_health_samples (
+			device_id text not null references devices(id) on delete cascade,
+			recorded_at text not null,
+			load_average_1 real not null default 0,
+			memory_used_pct real not null default 0,
+			disk_used_pct real not null default 0,
+			uptime_seconds real not null default 0,
+			primary key(device_id, recorded_at)
+		);`,
+		`create index if not exists device_health_samples_device_time_idx
+			on device_health_samples(device_id, recorded_at);`,
 		`create table if not exists device_metadata (
 			device_id text primary key references devices(id) on delete cascade,
 			note text not null default '',
@@ -1340,6 +1352,7 @@ func (s *Store) AuthenticateAgent(ctx context.Context, token string) (shared.Dev
 func (s *Store) UpdateCheckIn(ctx context.Context, deviceID string, health shared.HealthSnapshot, install shared.AgentInstallPaths) error {
 	now := time.Now().UTC()
 	ipsJSON, _ := json.Marshal(health.IPs)
+	healthJSON, _ := json.Marshal(health)
 	_, err := s.db.ExecContext(ctx, `
 		update devices
 		set hostname = ?, os_name = ?, ips_json = ?, agent_version = ?, last_seen_at = ?, updated_at = ?
@@ -1352,6 +1365,15 @@ func (s *Store) UpdateCheckIn(ctx context.Context, deviceID string, health share
 		update device_agent_updates
 		set reported_goos = ?, reported_goarch = ?, updated_at = ?
 		where device_id = ?`, health.AgentGOOS, health.AgentGOARCH, now.Format(time.RFC3339), deviceID); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `
+		update device_reports
+		set health_json = ?, updated_at = ?
+		where device_id = ?`, string(healthJSON), now.Format(time.RFC3339), deviceID); err != nil {
+		return err
+	}
+	if err := s.saveHealthSample(ctx, deviceID, health, now); err != nil {
 		return err
 	}
 	if strings.TrimSpace(health.AgentVersion) != "" && compareVersions(health.AgentVersion, version.AgentVersion) >= 0 {
@@ -1374,6 +1396,63 @@ func (s *Store) UpdateCheckIn(ctx context.Context, deviceID string, health share
 		return err
 	}
 	return s.resolveTopology(ctx)
+}
+
+func (s *Store) saveHealthSample(ctx context.Context, deviceID string, health shared.HealthSnapshot, now time.Time) error {
+	load1 := parseLoadAverage1(health.LoadAverage)
+	memPct := parsePercentValue(health.MemoryUsed)
+	diskPct := parsePercentValue(health.DiskUsed)
+	uptimeSeconds := parseUptimeSeconds(health.Uptime)
+	recordedAt := now.UTC().Format(time.RFC3339)
+	if _, err := s.db.ExecContext(ctx, `
+		insert or replace into device_health_samples (
+			device_id, recorded_at, load_average_1, memory_used_pct, disk_used_pct, uptime_seconds
+		) values (?, ?, ?, ?, ?, ?)`,
+		deviceID, recordedAt, load1, memPct, diskPct, uptimeSeconds,
+	); err != nil {
+		return err
+	}
+	cutoff := now.Add(-24 * time.Hour).UTC().Format(time.RFC3339)
+	_, err := s.db.ExecContext(ctx, `
+		delete from device_health_samples
+		where device_id = ? and recorded_at < ?`, deviceID, cutoff)
+	return err
+}
+
+func parseLoadAverage1(raw string) float64 {
+	fields := strings.Fields(strings.TrimSpace(raw))
+	if len(fields) == 0 {
+		return 0
+	}
+	n, err := strconv.ParseFloat(fields[0], 64)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
+
+func parsePercentValue(raw string) float64 {
+	raw = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(raw), "%"))
+	if raw == "" {
+		return 0
+	}
+	n, err := strconv.ParseFloat(raw, 64)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
+
+func parseUptimeSeconds(raw string) float64 {
+	raw = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(raw), "s"))
+	if raw == "" {
+		return 0
+	}
+	n, err := strconv.ParseFloat(raw, 64)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
 }
 
 func (s *Store) saveAgentInstallPaths(ctx context.Context, deviceID string, install shared.AgentInstallPaths, now time.Time) error {
@@ -1426,15 +1505,24 @@ func (s *Store) SaveReport(ctx context.Context, token string, report shared.Devi
 	if err != nil {
 		return err
 	}
-	healthJSON, _ := json.Marshal(report.LastPolicyHealth)
 	fingerprintsJSON, _ := json.Marshal(report.AuthorizedFingerprints)
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, err = s.db.ExecContext(ctx, `
-		update device_reports
-		set applied_revision = ?, user_present = ?, sudo_enabled = ?, audit_enabled = ?, authorized_fingerprints_json = ?, enforcement_succeeded = ?, error_message = ?, health_json = ?, updated_at = ?
-		where device_id = ?`,
-		report.AppliedRevision, boolInt(report.UserPresent), boolInt(report.SudoEnabled), boolInt(report.AuditEnabled),
-		string(fingerprintsJSON), boolInt(report.EnforcementSucceeded), report.ErrorMessage, string(healthJSON), now, device.ID)
+	if healthSnapshotMeaningful(report.LastPolicyHealth) {
+		healthJSON, _ := json.Marshal(report.LastPolicyHealth)
+		_, err = s.db.ExecContext(ctx, `
+			update device_reports
+			set applied_revision = ?, user_present = ?, sudo_enabled = ?, audit_enabled = ?, authorized_fingerprints_json = ?, enforcement_succeeded = ?, error_message = ?, health_json = ?, updated_at = ?
+			where device_id = ?`,
+			report.AppliedRevision, boolInt(report.UserPresent), boolInt(report.SudoEnabled), boolInt(report.AuditEnabled),
+			string(fingerprintsJSON), boolInt(report.EnforcementSucceeded), report.ErrorMessage, string(healthJSON), now, device.ID)
+	} else {
+		_, err = s.db.ExecContext(ctx, `
+			update device_reports
+			set applied_revision = ?, user_present = ?, sudo_enabled = ?, audit_enabled = ?, authorized_fingerprints_json = ?, enforcement_succeeded = ?, error_message = ?, updated_at = ?
+			where device_id = ?`,
+			report.AppliedRevision, boolInt(report.UserPresent), boolInt(report.SudoEnabled), boolInt(report.AuditEnabled),
+			string(fingerprintsJSON), boolInt(report.EnforcementSucceeded), report.ErrorMessage, now, device.ID)
+	}
 	if err != nil {
 		return err
 	}
@@ -1448,6 +1536,17 @@ func (s *Store) SaveReport(ctx context.Context, token string, report shared.Devi
 		return err
 	}
 	return s.resolveTopology(ctx)
+}
+
+func healthSnapshotMeaningful(health shared.HealthSnapshot) bool {
+	return strings.TrimSpace(health.Uptime) != "" ||
+		strings.TrimSpace(health.LoadAverage) != "" ||
+		strings.TrimSpace(health.MemoryUsed) != "" ||
+		strings.TrimSpace(health.DiskUsed) != "" ||
+		strings.TrimSpace(health.Hostname) != "" ||
+		strings.TrimSpace(health.OSName) != "" ||
+		len(health.IPs) > 0 ||
+		strings.TrimSpace(health.AgentVersion) != ""
 }
 
 func (s *Store) saveDiscoverySnapshot(ctx context.Context, deviceID string, topology shared.TopologyDiscovery) error {

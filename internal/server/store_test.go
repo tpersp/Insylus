@@ -189,6 +189,91 @@ func TestUpdateCheckInClearsStaleAgentUpdateFailureWhenCurrent(t *testing.T) {
 	}
 }
 
+func TestUpdateCheckInPersistsHealthSnapshot(t *testing.T) {
+	store := openTestStore(t)
+	defer store.Close()
+
+	device, err := store.CreateDevice(context.Background(), "MiscServer")
+	if err != nil {
+		t.Fatalf("CreateDevice: %v", err)
+	}
+
+	err = store.UpdateCheckIn(context.Background(), device.ID, shared.HealthSnapshot{
+		Hostname:     "miscserver",
+		OSName:       "Ubuntu",
+		IPs:          []string{"10.10.10.22"},
+		Uptime:       "123s",
+		LoadAverage:  "0.10 0.20 0.30",
+		MemoryUsed:   "42.0%",
+		DiskUsed:     "65.0%",
+		AgentVersion: version.AgentVersion,
+		AgentGOOS:    "linux",
+		AgentGOARCH:  "amd64",
+	}, shared.AgentInstallPaths{})
+	if err != nil {
+		t.Fatalf("UpdateCheckIn: %v", err)
+	}
+
+	record, err := store.GetDevice(context.Background(), device.ID)
+	if err != nil {
+		t.Fatalf("GetDevice: %v", err)
+	}
+	if record.Report.LastPolicyHealth.Uptime != "123s" {
+		t.Fatalf("expected uptime to persist from check-in, got %q", record.Report.LastPolicyHealth.Uptime)
+	}
+	if record.Report.LastPolicyHealth.LoadAverage != "0.10 0.20 0.30" {
+		t.Fatalf("expected load to persist from check-in, got %q", record.Report.LastPolicyHealth.LoadAverage)
+	}
+	if record.Report.LastPolicyHealth.MemoryUsed != "42.0%" || record.Report.LastPolicyHealth.DiskUsed != "65.0%" {
+		t.Fatalf("expected memory/disk to persist from check-in, got %+v", record.Report.LastPolicyHealth)
+	}
+}
+
+func TestSaveReportDoesNotClobberCheckInHealthWithEmptySnapshot(t *testing.T) {
+	store := openTestStore(t)
+	defer store.Close()
+
+	device, err := store.CreateDevice(context.Background(), "MiscServer")
+	if err != nil {
+		t.Fatalf("CreateDevice: %v", err)
+	}
+	bootstrap, err := store.RegisterAgent(context.Background(), shared.BootstrapRequest{
+		BootstrapToken: device.BootstrapToken,
+		Hostname:       "miscserver",
+		OSName:         "Ubuntu",
+		AgentVersion:   version.AgentVersion,
+	})
+	if err != nil {
+		t.Fatalf("RegisterAgent: %v", err)
+	}
+	if err := store.UpdateCheckIn(context.Background(), device.ID, shared.HealthSnapshot{
+		Hostname:     "miscserver",
+		OSName:       "Ubuntu",
+		IPs:          []string{"10.10.10.22"},
+		Uptime:       "123s",
+		LoadAverage:  "0.10 0.20 0.30",
+		MemoryUsed:   "42.0%",
+		DiskUsed:     "65.0%",
+		AgentVersion: version.AgentVersion,
+	}, shared.AgentInstallPaths{}); err != nil {
+		t.Fatalf("UpdateCheckIn: %v", err)
+	}
+	if err := store.SaveReport(context.Background(), bootstrap.AgentToken, shared.DeviceReport{
+		DeviceID:         device.ID,
+		LastPolicyHealth: shared.HealthSnapshot{},
+	}); err != nil {
+		t.Fatalf("SaveReport: %v", err)
+	}
+
+	record, err := store.GetDevice(context.Background(), device.ID)
+	if err != nil {
+		t.Fatalf("GetDevice: %v", err)
+	}
+	if record.Report.LastPolicyHealth.LoadAverage != "0.10 0.20 0.30" || record.Report.LastPolicyHealth.MemoryUsed != "42.0%" {
+		t.Fatalf("expected check-in health to remain intact, got %+v", record.Report.LastPolicyHealth)
+	}
+}
+
 func TestTopologyInferenceAndOverrides(t *testing.T) {
 	store := openTestStore(t)
 	defer store.Close()

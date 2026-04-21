@@ -369,6 +369,25 @@
           <p><span>Disk</span>{{ if .Inventory.Health.DiskUsed }}{{ .Inventory.Health.DiskUsed }}{{ else }}unknown{{ end }}</p>
           <p><span>Uptime</span>{{ if .Inventory.Health.Uptime }}{{ .Inventory.Health.Uptime }}{{ else }}unknown{{ end }}</p>
         </div>
+        <div class="health-history" data-device-id="{{ .Target.ID }}" data-window="{{ .HealthWindow }}">
+          <div class="health-history-toolbar">
+            <div>
+              <p class="eyebrow">Trend</p>
+              <p class="muted">Load is scaled within the selected window. Memory and disk stay on a 0-100% range.</p>
+            </div>
+            <div class="health-history-actions">
+              <button type="button" class="button-secondary compact-button health-history-window" data-window="30m">30m</button>
+              <button type="button" class="button-secondary compact-button health-history-window is-active" data-window="1h">1h</button>
+            </div>
+          </div>
+          <div class="health-history-legend">
+            <span><i class="health-line load"></i> Load <strong data-stat="load">--</strong></span>
+            <span><i class="health-line memory"></i> Memory <strong data-stat="memory">--</strong></span>
+            <span><i class="health-line disk"></i> Disk <strong data-stat="disk">--</strong></span>
+          </div>
+          <div class="health-history-status">Loading trend...</div>
+          <svg class="health-history-chart" viewBox="0 0 720 240" preserveAspectRatio="none" aria-label="Device health trend chart"></svg>
+        </div>
       </div>
 
       <div class="panel">
@@ -423,6 +442,127 @@
     </section>
     {{ end }}
   </main>
+{{ if .Inventory }}
+<script>
+(() => {
+  const root = document.querySelector('.health-history');
+  if (!root) return;
+  const svg = root.querySelector('.health-history-chart');
+  const status = root.querySelector('.health-history-status');
+  const buttons = Array.from(root.querySelectorAll('.health-history-window'));
+  const statLoad = root.querySelector('[data-stat="load"]');
+  const statMemory = root.querySelector('[data-stat="memory"]');
+  const statDisk = root.querySelector('[data-stat="disk"]');
+  const deviceId = root.dataset.deviceId;
+  let currentWindow = root.dataset.window || '1h';
+
+  const W = 720;
+  const H = 240;
+  const P = { top: 14, right: 14, bottom: 28, left: 40 };
+  const innerW = W - P.left - P.right;
+  const innerH = H - P.top - P.bottom;
+
+  function setActiveWindow(windowValue) {
+    currentWindow = windowValue;
+    buttons.forEach((button) => {
+      button.classList.toggle('is-active', button.dataset.window === windowValue);
+    });
+  }
+
+  function setLegend(latest) {
+    if (!latest) {
+      statLoad.textContent = '--';
+      statMemory.textContent = '--';
+      statDisk.textContent = '--';
+      return;
+    }
+    statLoad.textContent = latest.load_average_1.toFixed(2);
+    statMemory.textContent = latest.memory_used_pct.toFixed(1) + '%';
+    statDisk.textContent = latest.disk_used_pct.toFixed(1) + '%';
+  }
+
+  function polyline(points, klass) {
+    if (!points.length) return '';
+    return `<polyline class="${klass}" fill="none" points="${points.map((p) => p.join(',')).join(' ')}"></polyline>`;
+  }
+
+  function draw(samples) {
+    if (!samples.length) {
+      svg.innerHTML = '';
+      status.textContent = 'No recent health samples yet.';
+      setLegend(null);
+      return;
+    }
+    status.textContent = '';
+    const firstTs = new Date(samples[0].recorded_at).getTime();
+    const lastTs = new Date(samples[samples.length - 1].recorded_at).getTime();
+    const span = Math.max(lastTs - firstTs, 1);
+    const maxLoad = Math.max(1, ...samples.map((sample) => sample.load_average_1 || 0));
+
+    const projectX = (value) => P.left + ((value - firstTs) / span) * innerW;
+    const projectPctY = (value) => P.top + innerH - (Math.max(0, Math.min(100, value)) / 100) * innerH;
+    const projectLoadY = (value) => P.top + innerH - (Math.max(0, value) / maxLoad) * innerH;
+
+    const grid = [];
+    for (let i = 0; i <= 4; i++) {
+      const y = P.top + (innerH / 4) * i;
+      const label = 100 - i * 25;
+      grid.push(`<line class="health-grid" x1="${P.left}" y1="${y}" x2="${W - P.right}" y2="${y}"></line>`);
+      grid.push(`<text class="health-axis" x="${P.left - 8}" y="${y + 4}" text-anchor="end">${label}%</text>`);
+    }
+
+    const memPoints = [];
+    const diskPoints = [];
+    const loadPoints = [];
+    for (const sample of samples) {
+      const x = projectX(new Date(sample.recorded_at).getTime());
+      memPoints.push([x, projectPctY(sample.memory_used_pct)]);
+      diskPoints.push([x, projectPctY(sample.disk_used_pct)]);
+      loadPoints.push([x, projectLoadY(sample.load_average_1)]);
+    }
+
+    const startLabel = new Date(samples[0].recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const endLabel = new Date(samples[samples.length - 1].recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    svg.innerHTML = `
+      <rect class="health-chart-bg" x="${P.left}" y="${P.top}" width="${innerW}" height="${innerH}" rx="10"></rect>
+      ${grid.join('')}
+      ${polyline(loadPoints, 'health-series load')}
+      ${polyline(memPoints, 'health-series memory')}
+      ${polyline(diskPoints, 'health-series disk')}
+      <text class="health-axis" x="${P.left}" y="${H - 6}" text-anchor="start">${startLabel}</text>
+      <text class="health-axis" x="${W - P.right}" y="${H - 6}" text-anchor="end">${endLabel}</text>
+      <text class="health-axis" x="${W - P.right}" y="${P.top + 12}" text-anchor="end">Load max ${maxLoad.toFixed(2)}</text>
+    `;
+
+    setLegend(samples[samples.length - 1]);
+  }
+
+  async function load(windowValue) {
+    setActiveWindow(windowValue);
+    status.textContent = 'Loading trend...';
+    try {
+      const response = await fetch(`/api/devices/${encodeURIComponent(deviceId)}/health-history?window=${encodeURIComponent(windowValue)}`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+      const payload = await response.json();
+      draw(Array.isArray(payload.samples) ? payload.samples : []);
+    } catch (error) {
+      svg.innerHTML = '';
+      status.textContent = 'Could not load health trend.';
+      setLegend(null);
+    }
+  }
+
+  buttons.forEach((button) => {
+    button.addEventListener('click', () => load(button.dataset.window || '1h'));
+  });
+
+  load(currentWindow);
+})();
+</script>
+{{ end }}
 </body>
 </html>
 {{ end }}

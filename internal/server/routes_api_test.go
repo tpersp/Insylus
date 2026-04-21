@@ -539,6 +539,41 @@ func TestUninstallAgentPageUsesReportedInstallPaths(t *testing.T) {
 	}
 }
 
+func TestDeviceHealthHistoryAPI(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	device, err := app.store.CreateDevice(context.Background(), "MiscServer")
+	if err != nil {
+		t.Fatalf("CreateDevice: %v", err)
+	}
+	if err := app.store.UpdateCheckIn(context.Background(), device.ID, shared.HealthSnapshot{
+		Hostname:     "miscserver",
+		OSName:       "Ubuntu",
+		IPs:          []string{"10.10.10.22"},
+		Uptime:       "120s",
+		LoadAverage:  "0.20 0.10 0.05",
+		MemoryUsed:   "33.3%",
+		DiskUsed:     "44.4%",
+		AgentVersion: "test",
+	}, shared.AgentInstallPaths{}); err != nil {
+		t.Fatalf("UpdateCheckIn: %v", err)
+	}
+
+	var history shared.DeviceHealthHistory
+	doJSONRequest(t, app.Handler(), http.MethodGet, "/api/devices/"+device.ID+"/health-history?window=1h", "", nil, &history)
+	if history.DeviceID != device.ID {
+		t.Fatalf("history device id = %q, want %q", history.DeviceID, device.ID)
+	}
+	if len(history.Samples) == 0 {
+		t.Fatal("expected at least one health sample")
+	}
+	last := history.Samples[len(history.Samples)-1]
+	if last.LoadAverage1 == 0 || last.MemoryUsedPct == 0 || last.DiskUsedPct == 0 {
+		t.Fatalf("unexpected health sample: %+v", last)
+	}
+}
+
 func TestAgentPolicyUsesPersistedManagedAccountSettings(t *testing.T) {
 	app := newTestAppWithConfig(t, Config{
 		DBPath:        filepath.Join(t.TempDir(), "insylus.db"),

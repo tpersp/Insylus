@@ -424,6 +424,20 @@ type DeviceHealthInfo struct {
 	DiskUsed    string `json:"disk_used,omitempty"`
 }
 
+type DeviceHealthSample struct {
+	RecordedAt    time.Time `json:"recorded_at"`
+	LoadAverage1  float64   `json:"load_average_1"`
+	MemoryUsedPct float64   `json:"memory_used_pct"`
+	DiskUsedPct   float64   `json:"disk_used_pct"`
+	UptimeSeconds float64   `json:"uptime_seconds,omitempty"`
+}
+
+type DeviceHealthHistory struct {
+	DeviceID string               `json:"device_id"`
+	Window   string               `json:"window"`
+	Samples  []DeviceHealthSample `json:"samples"`
+}
+
 type TopologyGraphCluster struct {
 	ID    string           `json:"id"`
 	Label string           `json:"label"`
