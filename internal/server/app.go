@@ -58,6 +58,8 @@ func New(cfg Config, logger *log.Logger) (*App, error) {
 		capabilities:  newCapabilityRegistry(),
 	}
 	app.capabilities.Provide("managed_account_config_provider", app)
+	app.capabilities.Provide("device_admin_service", deviceAdminService{store: store, targets: store.targetService()})
+	app.capabilities.Provide("agent_controller_service", agentControllerService{app: app})
 	plugins := registry.Plugins()
 	if err := store.EnsurePluginSettings(context.Background(), plugins); err != nil {
 		return nil, err

@@ -91,6 +91,19 @@ type CapabilityRegistry interface {
 	Names() []string
 }
 
+type DeviceAdminService interface {
+	UpdateNote(ctx context.Context, deviceID, note string) error
+	SetTypeOverride(ctx context.Context, deviceID string, deviceType *shared.DeviceType) error
+	SetPurposeOverride(ctx context.Context, deviceID string, purpose *shared.DevicePurpose) error
+	SetParentOverride(ctx context.Context, deviceID string, state shared.ParentOverrideState, parentDeviceID *string) error
+}
+
+type AgentControllerService interface {
+	PolicyForDevice(ctx context.Context, baseURL string, device shared.Device, goos, goarch string) (shared.AgentPolicyResponse, error)
+	SaveAgentUpdateStatus(ctx context.Context, deviceID string, report shared.AgentUpdateReport) error
+	SaveReport(ctx context.Context, token string, report shared.DeviceReport) error
+}
+
 type PluginRegistry interface {
 	Available() []PluginManifest
 	Enabled(pluginID string) bool

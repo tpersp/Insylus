@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"insylus/internal/ctl"
+	"insylus/internal/shared"
 )
 
 type CLIOnlyHost struct {
@@ -99,6 +100,21 @@ type DisabledCapabilityRegistry struct{}
 func (DisabledCapabilityRegistry) Provide(string, any)       {}
 func (DisabledCapabilityRegistry) Lookup(string) (any, bool) { return nil, false }
 func (DisabledCapabilityRegistry) Names() []string           { return nil }
+
+type DisabledDeviceAdminService struct{}
+
+func (DisabledDeviceAdminService) UpdateNote(context.Context, string, string) error {
+	return sql.ErrConnDone
+}
+func (DisabledDeviceAdminService) SetTypeOverride(context.Context, string, *shared.DeviceType) error {
+	return sql.ErrConnDone
+}
+func (DisabledDeviceAdminService) SetPurposeOverride(context.Context, string, *shared.DevicePurpose) error {
+	return sql.ErrConnDone
+}
+func (DisabledDeviceAdminService) SetParentOverride(context.Context, string, shared.ParentOverrideState, *string) error {
+	return sql.ErrConnDone
+}
 
 type DisabledPluginRegistry struct{}
 
