@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -271,6 +272,231 @@ func TestSaveReportDoesNotClobberCheckInHealthWithEmptySnapshot(t *testing.T) {
 	}
 	if record.Report.LastPolicyHealth.LoadAverage != "0.10 0.20 0.30" || record.Report.LastPolicyHealth.MemoryUsed != "42.0%" {
 		t.Fatalf("expected check-in health to remain intact, got %+v", record.Report.LastPolicyHealth)
+	}
+}
+
+func TestMigrateBackfillsLegacyReportRowsAndHealthColumn(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "legacy.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open legacy db: %v", err)
+	}
+	defer db.Close()
+
+	stmts := []string{
+		`create table devices (
+			id text primary key,
+			name text not null,
+			bootstrap_token text not null unique,
+			agent_token text not null default '',
+			hostname text not null default '',
+			os_name text not null default '',
+			ips_json text not null default '[]',
+			agent_version text not null default '',
+			last_seen_at text,
+			created_at text not null,
+			updated_at text not null
+		);`,
+		`create table device_access_policies (
+			device_id text primary key references devices(id) on delete cascade,
+			access_mode text not null default 'disabled',
+			ssh_key_id integer,
+			policy_revision integer not null default 1,
+			updated_at text not null
+		);`,
+		`create table device_reports (
+			device_id text primary key references devices(id) on delete cascade,
+			applied_revision integer not null default 0,
+			user_present integer not null default 0,
+			sudo_enabled integer not null default 0,
+			audit_enabled integer not null default 0,
+			authorized_fingerprints_json text not null default '[]',
+			enforcement_succeeded integer not null default 0,
+			error_message text not null default '',
+			updated_at text not null
+		);`,
+		`create table device_metadata (
+			device_id text primary key references devices(id) on delete cascade,
+			note text not null default '',
+			type_override text,
+			parent_override_device_id text references devices(id) on delete set null,
+			parent_override_state text not null default 'inherit',
+			updated_at text not null
+		);`,
+		`create table device_discovery_snapshots (
+			device_id text primary key references devices(id) on delete cascade,
+			device_type text not null default 'unknown',
+			platform_class text not null default 'unknown',
+			workloads_json text not null default '[]',
+			child_candidates_json text not null default '[]',
+			warnings_json text not null default '[]',
+			updated_at text not null
+		);`,
+		`create table relationship_candidates (
+			child_device_id text primary key references devices(id) on delete cascade,
+			parent_device_id text references devices(id) on delete cascade,
+			confidence text not null default '',
+			reason text not null default '',
+			updated_at text not null
+		);`,
+		`create table app_settings (
+			key text primary key,
+			value text not null,
+			updated_at text not null
+		);`,
+		`create table targets (
+			id text primary key,
+			name text not null,
+			kind text not null default 'target',
+			hostname text not null default '',
+			ips_json text not null default '[]',
+			tags_json text not null default '[]',
+			note text not null default '',
+			created_by text not null default '',
+			created_at text not null,
+			updated_at text not null
+		);`,
+		`create table target_addresses (
+			target_id text not null references targets(id) on delete cascade,
+			kind text not null,
+			value text not null,
+			created_at text not null,
+			updated_at text not null,
+			primary key(target_id, kind)
+		);`,
+		`create table target_metadata (
+			target_id text not null references targets(id) on delete cascade,
+			plugin_id text not null,
+			metadata_json text not null default '{}',
+			updated_at text not null,
+			primary key(target_id, plugin_id)
+		);`,
+		`create table plugin_settings (
+			plugin_id text primary key,
+			enabled integer not null default 0,
+			settings_json text not null default '{}',
+			created_at text not null,
+			updated_at text not null
+		);`,
+		`create table plugin_secrets (
+			plugin_id text not null,
+			name text not null,
+			ciphertext text not null,
+			created_at text not null,
+			updated_at text not null,
+			primary key(plugin_id, name)
+		);`,
+		`create table device_agent_updates (
+			device_id text primary key references devices(id) on delete cascade,
+			auto_update_override text not null default 'inherit',
+			effective_enabled integer not null default 0,
+			update_available integer not null default 0,
+			server_agent_version text not null default '',
+			status text not null default 'idle',
+			error text not null default '',
+			last_checked_at text,
+			last_attempted_at text,
+			reported_goos text not null default '',
+			reported_goarch text not null default '',
+			updated_at text not null
+		);`,
+		`create table topology_nodes (
+			id integer primary key autoincrement,
+			name text not null,
+			kind text not null,
+			note text not null default '',
+			created_at text not null,
+			updated_at text not null
+		);`,
+		`create table topology_links (
+			id integer primary key autoincrement,
+			from_kind text not null,
+			from_id text not null,
+			to_kind text not null,
+			to_id text not null,
+			label text not null default '',
+			source text not null default 'manual',
+			created_at text not null,
+			updated_at text not null
+		);`,
+		`create table service_instances (
+			id integer primary key autoincrement,
+			device_id text not null references devices(id) on delete cascade,
+			normalized_name text not null,
+			name text not null,
+			kind text not null,
+			image text not null default '',
+			state text not null default '',
+			discovered_state text not null default '',
+			health text not null default 'unknown',
+			endpoints_json text not null default '[]',
+			first_seen_at text not null,
+			last_seen_at text,
+			missing_since text,
+			last_reported_at text not null,
+			created_at text not null,
+			updated_at text not null
+		);`,
+		`create table service_events (
+			id integer primary key autoincrement,
+			service_instance_id integer,
+			device_id text not null references devices(id) on delete cascade,
+			service_name text not null,
+			service_kind text not null,
+			action text not null,
+			details text not null default '',
+			created_at text not null
+		);`,
+	}
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("exec legacy stmt failed: %v\n%s", err, stmt)
+		}
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	if _, err := db.Exec(`insert into devices (id, name, bootstrap_token, created_at, updated_at) values (?, ?, ?, ?, ?)`, "dev1", "MiscServer", "boot", now, now); err != nil {
+		t.Fatalf("insert device: %v", err)
+	}
+	if _, err := db.Exec(`insert into targets (id, name, created_at, updated_at) values (?, ?, ?, ?)`, "dev1", "MiscServer", now, now); err != nil {
+		t.Fatalf("insert target: %v", err)
+	}
+	if _, err := db.Exec(`insert into device_access_policies (device_id, access_mode, policy_revision, updated_at) values (?, 'disabled', 1, ?)`, "dev1", now); err != nil {
+		t.Fatalf("insert legacy policy: %v", err)
+	}
+
+	store, err := OpenStore(dbPath)
+	if err != nil {
+		t.Fatalf("OpenStore migrated legacy db: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.UpdateCheckIn(context.Background(), "dev1", shared.HealthSnapshot{
+		Hostname:     "miscserver",
+		OSName:       "Ubuntu",
+		IPs:          []string{"10.10.10.22"},
+		Uptime:       "123s",
+		LoadAverage:  "0.10 0.20 0.30",
+		MemoryUsed:   "42.0%",
+		DiskUsed:     "65.0%",
+		AgentVersion: version.AgentVersion,
+	}, shared.AgentInstallPaths{}); err != nil {
+		t.Fatalf("UpdateCheckIn after legacy migration: %v", err)
+	}
+
+	record, err := store.GetDevice(context.Background(), "dev1")
+	if err != nil {
+		t.Fatalf("GetDevice: %v", err)
+	}
+	if record.Report.LastPolicyHealth.LoadAverage != "0.10 0.20 0.30" || record.Report.LastPolicyHealth.MemoryUsed != "42.0%" {
+		t.Fatalf("expected migrated legacy db to persist health, got %+v", record.Report.LastPolicyHealth)
+	}
+
+	var samples int
+	if err := store.db.QueryRowContext(context.Background(), `select count(*) from device_health_samples where device_id = ?`, "dev1").Scan(&samples); err != nil {
+		t.Fatalf("count health samples: %v", err)
+	}
+	if samples == 0 {
+		t.Fatal("expected migrated legacy db to record health samples")
 	}
 }
 

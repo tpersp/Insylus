@@ -497,10 +497,23 @@ func (s *Store) migrate(ctx context.Context) error {
 	if err := s.ensureColumn(ctx, "device_access_policies", "managed_account_enabled", "integer not null default 0"); err != nil {
 		return err
 	}
+	if err := s.ensureColumn(ctx, "device_reports", "health_json", "text not null default '{}'"); err != nil {
+		return err
+	}
 	if err := s.ensureColumn(ctx, "device_metadata", "purpose_override", "text"); err != nil {
 		return err
 	}
 	backfills := []string{
+		`insert into device_access_policies (device_id, device_mode, managed_account_enabled, access_mode, policy_revision, updated_at)
+		 select d.id, 'inventory-only', 0, 'disabled', 1, coalesce(d.updated_at, d.created_at, ?)
+		 from devices d
+		 left join device_access_policies p on p.device_id = d.id
+		 where p.device_id is null;`,
+		`insert into device_reports (device_id, updated_at)
+		 select d.id, coalesce(d.updated_at, d.created_at, ?)
+		 from devices d
+		 left join device_reports r on r.device_id = d.id
+		 where r.device_id is null;`,
 		`insert into device_metadata (device_id, updated_at)
 		 select d.id, coalesce(d.updated_at, d.created_at, ?)
 		 from devices d
@@ -521,6 +534,11 @@ func (s *Store) migrate(ctx context.Context) error {
 		 from devices d
 		 left join device_agent_updates au on au.device_id = d.id
 		 where au.device_id is null;`,
+		`insert into device_agent_installs (device_id, updated_at)
+		 select d.id, coalesce(d.updated_at, d.created_at, ?)
+		 from devices d
+		 left join device_agent_installs ai on ai.device_id = d.id
+		 where ai.device_id is null;`,
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	for _, stmt := range backfills {
