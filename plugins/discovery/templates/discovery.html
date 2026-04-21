@@ -1,0 +1,101 @@
+{{ define "discovery.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Network Discovery</title>
+  {{ template "head-assets" . }}
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page">
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">WatchYouLan Style</p>
+          <h2>Network Discovery</h2>
+        </div>
+      </div>
+      <p>Run a manual TCP sweep against a targeted IPv4 subnet. Discovered devices stay in this queue until you explicitly promote them into Insylus inventory.</p>
+      <form method="post" action="/discovery/scan" class="quick-add">
+        <label>Subnet
+          <input type="text" name="cidr" placeholder="10.10.10.0/24" required>
+        </label>
+        <label>TCP ports
+          <input type="text" name="ports" value="{{ .DefaultPorts }}" placeholder="22, 80, 443, 8006">
+        </label>
+        <button type="submit">Scan subnet</button>
+      </form>
+      <p class="muted">Current MVP treats a host as present when at least one probe connects or returns TCP connection refused. Reverse DNS and the local ARP table are used when available.</p>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Review Queue</p>
+          <h2>Discovered Devices</h2>
+        </div>
+        <div class="section-actions">
+          <a class="button-secondary" href="/api/discovery">JSON</a>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Hostname</th>
+              <th>IP</th>
+              <th>MAC</th>
+              <th>Open ports</th>
+              <th>Status</th>
+              <th>Last seen</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{ range .Candidates }}
+            <tr>
+              <td><strong>{{ .DisplayName }}</strong></td>
+              <td>{{ if .Hostname }}{{ .Hostname }}{{ else }}<span class="muted">unknown</span>{{ end }}</td>
+              <td><code>{{ .IPAddress }}</code></td>
+              <td>{{ if .MACAddress }}<code>{{ .MACAddress }}</code>{{ else }}<span class="muted">unknown</span>{{ end }}</td>
+              <td>{{ range .OpenPorts }}<code>{{ . }}</code> {{ else }}<span class="muted">none</span>{{ end }}</td>
+              <td>
+                <span class="pill {{ if eq .Status "pending" }}pill-ok{{ else if eq .Status "ignored" }}pill-muted{{ else }}pill{{ end }}">{{ .Status }}</span>
+                {{ if .SourceCIDR }}<div class="muted">{{ .SourceCIDR }}</div>{{ end }}
+              </td>
+              <td>{{ formatTime .LastSeenAt }}</td>
+              <td>
+                {{ if eq .Status "promoted" }}
+                {{ if .PromotedTargetID }}<a class="button-secondary compact-button" href="/devices/{{ .PromotedTargetID }}">Open device</a>{{ end }}
+                {{ else }}
+                <form method="post" action="/discovery/{{ .ID }}/promote" style="display:inline">
+                  <button type="submit" class="compact-button">Promote</button>
+                </form>
+                {{ end }}
+                {{ if eq .Status "ignored" }}
+                <form method="post" action="/discovery/{{ .ID }}/status" style="display:inline">
+                  <input type="hidden" name="status" value="pending">
+                  <button type="submit" class="button-secondary compact-button">Restore</button>
+                </form>
+                {{ else if ne .Status "promoted" }}
+                <form method="post" action="/discovery/{{ .ID }}/status" style="display:inline">
+                  <input type="hidden" name="status" value="ignored">
+                  <button type="submit" class="button-secondary compact-button">Ignore</button>
+                </form>
+                {{ end }}
+              </td>
+            </tr>
+            {{ else }}
+            <tr><td colspan="8">No discovered devices yet. Run a scan to populate the review queue.</td></tr>
+            {{ end }}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
+{{ end }}
