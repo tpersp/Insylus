@@ -213,7 +213,11 @@ func extractTarGz(data []byte, dstDir string) error {
 			continue
 		}
 		cleanName := filepath.Clean(name)
-		if cleanName == "." || cleanName == ".." || strings.HasPrefix(cleanName, "../") || filepath.IsAbs(cleanName) {
+		isDir := hdr.Typeflag == tar.TypeDir
+		if cleanName == "." && isDir {
+			// Root directory entry, skip
+			continue
+		} else if cleanName == "." || cleanName == ".." || strings.HasPrefix(cleanName, "../") || filepath.IsAbs(cleanName) {
 			return fmt.Errorf("invalid bundle entry %q", name)
 		}
 		targetPath := filepath.Join(dstDir, cleanName)
