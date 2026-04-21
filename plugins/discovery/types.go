@@ -26,13 +26,11 @@ type candidate struct {
 }
 
 type scanRequest struct {
-	CIDR  string `json:"cidr"`
-	Ports []int  `json:"ports,omitempty"`
+	CIDR string `json:"cidr"`
 }
 
 type scanResponse struct {
 	CIDR       string      `json:"cidr"`
-	Ports      []int       `json:"ports"`
 	Scanned    int         `json:"scanned"`
 	Discovered int         `json:"discovered"`
 	Candidates []candidate `json:"candidates"`

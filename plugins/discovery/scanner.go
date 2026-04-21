@@ -3,37 +3,32 @@ package discovery
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/netip"
 	"os"
+	"os/exec"
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
 const (
 	maxScanHosts   = 4096
 	scanWorkers    = 64
-	portTimeout    = 250 * time.Millisecond
 	lookupTimeout  = 400 * time.Millisecond
 	defaultTimeout = 45 * time.Second
 )
 
-var defaultPorts = []int{22, 80, 443, 445, 8006, 8080, 8443}
-
 type scanner interface {
-	ScanSubnet(ctx context.Context, cidr string, ports []int) (scanResponse, error)
+	ScanSubnet(ctx context.Context, cidr string) (scanResponse, error)
 }
 
 type lanScanner struct{}
 
-func (lanScanner) ScanSubnet(ctx context.Context, cidr string, ports []int) (scanResponse, error) {
+func (lanScanner) ScanSubnet(ctx context.Context, cidr string) (scanResponse, error) {
 	cidr = strings.TrimSpace(cidr)
-	ports = normalizedPorts(ports)
 	ips, err := hostsFromCIDR(cidr)
 	if err != nil {
 		return scanResponse{}, err
@@ -43,8 +38,8 @@ func (lanScanner) ScanSubnet(ctx context.Context, cidr string, ports []int) (sca
 	defer cancel()
 
 	type outcome struct {
-		result scanResult
-		ok     bool
+		ip      string
+		replied bool
 	}
 	work := make(chan string)
 	results := make(chan outcome, len(ips))
@@ -59,8 +54,7 @@ func (lanScanner) ScanSubnet(ctx context.Context, cidr string, ports []int) (sca
 		go func() {
 			defer wg.Done()
 			for ip := range work {
-				result, ok := probeHost(ctx, ip, ports)
-				results <- outcome{result: result, ok: ok}
+				results <- outcome{ip: ip, replied: pingHost(ctx, ip)}
 			}
 		}()
 	}
@@ -81,22 +75,31 @@ func (lanScanner) ScanSubnet(ctx context.Context, cidr string, ports []int) (sca
 		close(results)
 	}()
 
-	candidates := make([]scanResult, 0)
+	pingReplies := make(map[string]bool, len(ips))
 	for outcome := range results {
-		if outcome.ok {
-			candidates = append(candidates, outcome.result)
-		}
+		pingReplies[outcome.ip] = outcome.replied
 	}
 
 	arp := arpTable()
-	for i := range candidates {
-		if candidates[i].MACAddress == "" {
-			candidates[i].MACAddress = arp[candidates[i].IPAddress]
+	candidates := make([]scanResult, 0, len(ips))
+	for _, ip := range ips {
+		mac := arp[ip]
+		if !pingReplies[ip] && mac == "" {
+			continue
 		}
-		if candidates[i].DisplayName == "" {
-			candidates[i].DisplayName = suggestedName(candidates[i].Hostname, candidates[i].IPAddress)
+		result := scanResult{
+			IPAddress:  ip,
+			MACAddress: mac,
+			KindHint:   "linux-host",
 		}
-		candidates[i].KindHint = kindHintForPorts(candidates[i].OpenPorts)
+		lookupCtx, cancel := context.WithTimeout(ctx, lookupTimeout)
+		names, err := net.DefaultResolver.LookupAddr(lookupCtx, ip)
+		cancel()
+		if err == nil && len(names) > 0 {
+			result.Hostname = strings.TrimSuffix(strings.TrimSpace(names[0]), ".")
+		}
+		result.DisplayName = suggestedName(result.Hostname, ip)
+		candidates = append(candidates, result)
 	}
 
 	sort.Slice(candidates, func(i, j int) bool {
@@ -105,31 +108,24 @@ func (lanScanner) ScanSubnet(ctx context.Context, cidr string, ports []int) (sca
 
 	return scanResponse{
 		CIDR:       cidr,
-		Ports:      ports,
 		Scanned:    len(ips),
 		Discovered: len(candidates),
+		Candidates: flattenScanResults(candidates),
 	}, nil
 }
 
-func normalizedPorts(ports []int) []int {
-	if len(ports) == 0 {
-		ports = defaultPorts
-	}
-	seen := map[int]struct{}{}
-	out := make([]int, 0, len(ports))
-	for _, port := range ports {
-		if port < 1 || port > 65535 {
-			continue
-		}
-		if _, ok := seen[port]; ok {
-			continue
-		}
-		seen[port] = struct{}{}
-		out = append(out, port)
-	}
-	sort.Ints(out)
-	if len(out) == 0 {
-		return append([]int(nil), defaultPorts...)
+func flattenScanResults(items []scanResult) []candidate {
+	out := make([]candidate, 0, len(items))
+	for _, item := range items {
+		out = append(out, candidate{
+			DisplayName: item.DisplayName,
+			Hostname:    item.Hostname,
+			IPAddress:   item.IPAddress,
+			MACAddress:  item.MACAddress,
+			OpenPorts:   append([]int(nil), item.OpenPorts...),
+			KindHint:    item.KindHint,
+			Status:      statusPending,
+		})
 	}
 	return out
 }
@@ -167,41 +163,12 @@ func hostsFromCIDR(cidr string) ([]string, error) {
 	return out, nil
 }
 
-func probeHost(ctx context.Context, ip string, ports []int) (scanResult, bool) {
-	result := scanResult{IPAddress: ip}
-	alive := false
-	for _, port := range ports {
-		dialer := net.Dialer{Timeout: portTimeout}
-		conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(ip, fmt.Sprintf("%d", port)))
-		if err == nil {
-			alive = true
-			result.OpenPorts = append(result.OpenPorts, port)
-			_ = conn.Close()
-			continue
-		}
-		if isConnectionRefused(err) {
-			alive = true
-		}
-	}
-	if !alive {
-		return scanResult{}, false
-	}
-
-	lookupCtx, cancel := context.WithTimeout(ctx, lookupTimeout)
-	defer cancel()
-	names, err := net.DefaultResolver.LookupAddr(lookupCtx, ip)
-	if err == nil && len(names) > 0 {
-		result.Hostname = strings.TrimSuffix(strings.TrimSpace(names[0]), ".")
-	}
-	result.DisplayName = suggestedName(result.Hostname, ip)
-	return result, true
-}
-
-func isConnectionRefused(err error) bool {
-	if err == nil {
+func pingHost(ctx context.Context, ip string) bool {
+	cmd := exec.CommandContext(ctx, "ping", "-n", "-c", "1", "-W", "1", ip)
+	if err := cmd.Run(); err != nil {
 		return false
 	}
-	return errors.Is(err, syscall.ECONNREFUSED)
+	return true
 }
 
 func arpTable() map[string]string {
@@ -278,28 +245,6 @@ func sanitizeName(value string) string {
 		}
 	}
 	return strings.Trim(b.String(), "-")
-}
-
-func kindHintForPorts(ports []int) string {
-	set := map[int]struct{}{}
-	for _, port := range ports {
-		set[port] = struct{}{}
-	}
-	switch {
-	case hasPort(set, 8006):
-		return "proxmox-node"
-	case hasPort(set, 2375) || hasPort(set, 2376):
-		return "docker-host"
-	case hasPort(set, 22):
-		return "linux-host"
-	default:
-		return "target"
-	}
-}
-
-func hasPort(ports map[int]struct{}, port int) bool {
-	_, ok := ports[port]
-	return ok
 }
 
 func compareIPs(a, b string) int {

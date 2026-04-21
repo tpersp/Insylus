@@ -281,25 +281,6 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func normalizePortsText(text string) []int {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return nil
-	}
-	fields := strings.FieldsFunc(text, func(r rune) bool {
-		return r == ',' || r == ' ' || r == '\n' || r == '\t' || r == ';'
-	})
-	var ports []int
-	for _, field := range fields {
-		port, err := strconv.Atoi(strings.TrimSpace(field))
-		if err != nil {
-			continue
-		}
-		ports = append(ports, port)
-	}
-	return normalizedPorts(ports)
-}
-
 func ipStringList(values ...string) []string {
 	out := make([]string, 0, len(values))
 	seen := map[string]struct{}{}

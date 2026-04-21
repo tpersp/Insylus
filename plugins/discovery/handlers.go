@@ -17,8 +17,7 @@ type runtime struct {
 }
 
 type pageData struct {
-	Candidates   []candidate
-	DefaultPorts string
+	Candidates []candidate
 }
 
 func newRuntime(host pluginhost.Host) runtime {
@@ -35,13 +34,8 @@ func (rt runtime) handlePage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defaultPortsText := make([]string, 0, len(defaultPorts))
-	for _, port := range defaultPorts {
-		defaultPortsText = append(defaultPortsText, strconv.Itoa(port))
-	}
 	rt.render(w, "discovery.html", pageData{
-		Candidates:   items,
-		DefaultPorts: strings.Join(defaultPortsText, ", "),
+		Candidates: items,
 	})
 }
 
@@ -59,7 +53,7 @@ func (rt runtime) handleScan(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	scan, err := rt.scanner.ScanSubnet(r.Context(), req.CIDR, req.Ports)
+	scan, err := rt.scanner.ScanSubnet(r.Context(), req.CIDR)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -126,7 +120,6 @@ func scanRequestFromHTTP(w http.ResponseWriter, r *http.Request) (scanRequest, b
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return req, false
 		}
-		req.Ports = normalizedPorts(req.Ports)
 		req.CIDR = strings.TrimSpace(req.CIDR)
 		if req.CIDR == "" {
 			http.Error(w, "cidr is required", http.StatusBadRequest)
@@ -139,7 +132,6 @@ func scanRequestFromHTTP(w http.ResponseWriter, r *http.Request) (scanRequest, b
 		return req, false
 	}
 	req.CIDR = strings.TrimSpace(r.FormValue("cidr"))
-	req.Ports = normalizePortsText(r.FormValue("ports"))
 	if req.CIDR == "" {
 		http.Error(w, "cidr is required", http.StatusBadRequest)
 		return req, false
