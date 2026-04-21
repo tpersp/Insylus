@@ -84,6 +84,8 @@ Discovery queue:
 curl http://127.0.0.1:8080/api/discovery
 ```
 
+There is currently no dedicated `insylusctl discovery` command. Discovery is a web/API-only workflow.
+
 Single device:
 
 ```bash
@@ -237,6 +239,51 @@ curl http://127.0.0.1:8080/api/services
 curl "http://127.0.0.1:8080/api/services/find?q=jellyfin"
 curl "http://127.0.0.1:8080/api/services?device=docker01"
 ```
+
+Read discovery candidates:
+
+```bash
+curl http://127.0.0.1:8080/api/discovery
+```
+
+## Discovery plugin
+
+The Discovery plugin is a manual subnet review tool for answering:
+
+- which IPs are in use on this subnet
+- which devices may still be missing from Insylus inventory
+
+It does not enroll devices, install agents, or create access policy by itself.
+
+### Rules
+
+- Discovery is web/API-only; there is no dedicated CLI command yet.
+- Scans are manual and target one IPv4 subnet such as `192.168.0.0/24`.
+- Presence is based on ping plus the controller's local ARP or neighbor table.
+- Hostname is best-effort from reverse DNS.
+- MAC is only available when the controller can learn it from the local network.
+- Existing targets/devices matched by IP first, then hostname/name fallback, appear as `known`.
+- `known` entries are already in inventory and should not be promoted again.
+
+### API endpoints
+
+```bash
+GET  /api/discovery
+POST /api/discovery/scan
+POST /api/discovery/<candidate-id>/promote
+POST /api/discovery/<candidate-id>/status
+```
+
+### Web UI
+
+- `/discovery` — manual subnet scan and discovery review queue
+
+### Discovery statuses
+
+- `pending` — discovered and not yet reviewed
+- `known` — already matched to an existing target/device
+- `ignored` — intentionally skipped from the review queue
+- `promoted` — added to inventory from discovery
 
 Read and operate Proxmox nodes:
 

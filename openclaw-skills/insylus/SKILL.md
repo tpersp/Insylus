@@ -15,7 +15,7 @@ Use this skill when you need to find a device, locate a running service, check i
 - Use `--server URL` to target a remote Insylus server (defaults to local).
 - Prefer `--json` for machine-readable output.
 - Check enabled plugins before assuming a command or route exists.
-- Disabled plugin web routes, API routes, and static assets return `404` immediately; newly enabled plugins may require an `insylus.service` restart before their routes exist.
+- Disabled plugin web routes, API routes, navigation items, and static assets return `404` or disappear immediately; enabling a compiled plugin makes it available immediately.
 - Managed SSH requires the Access plugin and a successfully applied access policy.
 - Insylus never creates API tokens for external services — a human must create and register them.
 - Topology is a web map only; not available via CLI or API.
@@ -139,6 +139,39 @@ insylusctl plugins purge PLUGIN          # Remove plugin configuration
 insylusctl plugins profiles [--json]      # List available profiles
 insylusctl plugins apply-profile PROFILE  # Apply a plugin profile
 ```
+
+## Discovery plugin
+
+The Discovery plugin is a manual subnet review tool for checking which IPs are in use and which devices may still be missing from Insylus inventory.
+
+### Rules
+
+- Discovery is web/API-only; there is no dedicated `insylusctl discovery` command yet.
+- Scans are manual and target one IPv4 subnet such as `192.168.0.0/24`.
+- Presence is based on ping plus the controller's local ARP or neighbor table.
+- Reverse DNS may provide a hostname; MAC is available only when the controller can learn it on the local network.
+- Matches against existing targets/devices are shown as `known`, not `pending`.
+- `known` entries should not be promoted again.
+
+### API endpoints
+
+```bash
+GET  /api/discovery
+POST /api/discovery/scan
+POST /api/discovery/<candidate-id>/promote
+POST /api/discovery/<candidate-id>/status
+```
+
+### Discovery statuses
+
+- `pending` — discovered and not yet reviewed
+- `known` — already matched to an existing target/device
+- `ignored` — intentionally skipped
+- `promoted` — added to inventory from discovery
+
+### Web UI
+
+- `/discovery` — manual subnet scan and discovery review queue
 
 ## Devices plugin
 

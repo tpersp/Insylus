@@ -274,6 +274,31 @@ insylus devices --json
 insylus devices --find MiscServer --json
 ```
 
+Discovery is currently a web/API workflow rather than a dedicated CLI command:
+
+```bash
+curl http://127.0.0.1:8080/api/discovery
+```
+
+The Discovery plugin provides a manual subnet scan at `/discovery` for answering:
+
+- which IPs are already in use on a subnet such as `192.168.0.0/24`
+- which devices may still be missing from Insylus inventory
+
+Discovery statuses:
+
+- `pending` — discovered and not yet reviewed
+- `known` — already matched to an existing device/target
+- `ignored` — intentionally skipped
+- `promoted` — added to inventory from discovery
+
+Notes:
+
+- presence is based on ping plus the controller's local ARP or neighbor table
+- hostname is best-effort from reverse DNS
+- MAC is only available when the controller can learn it on the local network
+- `known` entries are already in inventory and should not be promoted again
+
 If your current shell says `command not found` right after installation, refresh the shell command cache once:
 
 ```bash

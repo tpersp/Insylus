@@ -161,7 +161,7 @@ func printRestartHint(result map[string]string) {
 	case "required":
 		fmt.Fprintln(os.Stdout, "restart insylus.service for newly enabled plugin routes and nav links to appear")
 	case "not_required":
-		fmt.Fprintln(os.Stdout, "disabled plugin routes are gated immediately")
+		fmt.Fprintln(os.Stdout, "plugin change is live immediately")
 	}
 }
 

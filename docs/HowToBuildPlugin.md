@@ -269,7 +269,7 @@ Rules for CLI plugins:
 - Prefer `--find VALUE` for device lookup instead of forcing users or agents to know opaque IDs.
 - Do not register a CLI command for web-only plugins.
 
-The command `insylusctl plugins` lists CLI-capable plugins only. A plugin that only registers web/API behavior should not appear there.
+The command `insylusctl plugins` talks to the server plugin registry and lists all compiled runtime-manageable plugins, including web/API-only plugins.
 
 ## API Plugins
 
@@ -770,7 +770,7 @@ func (Plugin) Register(host pluginhost.Host) error {
 }
 ```
 
-This plugin will not appear in `insylusctl plugins`.
+This plugin will still appear in `insylusctl plugins` because plugin management is driven by the server registry, not by whether the plugin registers a CLI command.
 
 ### Web UI Private JSON
 
@@ -834,7 +834,7 @@ Expected topology behavior:
 - `/topology/graph` returns data for the web UI.
 - `/api/topology` returns `404`.
 - `insylusctl topology` is unknown.
-- `topology` does not appear in `insylusctl plugins`.
+- `topology` still appears in `insylusctl plugins` because plugin management reflects the server registry, not CLI command availability.
 
 ## Current Built-In Plugins
 
@@ -843,11 +843,15 @@ Current top-level plugins:
 - `plugins/access`: access settings, keys, policy, device mode, agent auto-update web/API behavior.
 - `plugins/agent`: bootstrap, checkin, policy fetch, report, install page/script, agent downloads.
 - `plugins/dashboard`: web-only landing dashboard at `/`.
+- `plugins/discovery`: web/API subnet discovery queue at `/discovery` and `/api/discovery*`.
 - `plugins/devices`: device CLI, `/devices`, `/devices/{id}`, and `/api/devices*`.
+- `plugins/docker`: Docker CLI, `/docker`, `/docker/devices/{target_id}`, and `/api/docker*`.
 - `plugins/help`: CLI help and CLI plugin list commands.
+- `plugins/jellyfin`: Jellyfin CLI, `/jellyfin`, and `/api/jellyfin*`.
 - `plugins/proxmox`: Proxmox CLI, `/api/proxmox*`, `/proxmox` token setup page, and user-provided token storage.
 - `plugins/services`: services CLI, `/api/services*`, services and history web pages.
 - `plugins/topology`: web-only topology page, topology edit routes, `/topology/graph`, and topology assets.
+- `plugins/update`: web/API server update workflow at `/update` and `/api/update*`.
 - `plugins/wake`: wake CLI plus web/API wake actions.
 
 The Proxmox plugin is intentionally based on user-created API tokens. Do not add token auto-provisioning unless a future plan explicitly changes that product decision.
