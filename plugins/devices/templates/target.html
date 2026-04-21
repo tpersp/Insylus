@@ -203,7 +203,10 @@
             <p class="eyebrow">Agent</p>
             <h2>Update State</h2>
           </div>
-          <span class="pill {{ if .Inventory.Agent.AutoUpdate.UpdateAvailable }}pill-warn{{ else if eq .Inventory.Agent.AutoUpdate.Status "failed" }}pill-danger{{ else }}pill-ok{{ end }}">{{ if .Inventory.Agent.AutoUpdate.Status }}{{ .Inventory.Agent.AutoUpdate.Status }}{{ else }}idle{{ end }}</span>
+          <div class="title-actions">
+            <span class="pill {{ agentHealthClass .Inventory.Identity.LastSeenAt }}">{{ agentHealthLabel .Inventory.Identity.LastSeenAt }}</span>
+            <span class="pill {{ agentUpdateClass .Inventory.Agent.AutoUpdate }}">{{ agentUpdateLabel .Inventory.Agent.AutoUpdate }}</span>
+          </div>
         </div>
         <div class="facts">
           <p><span>Effective</span><strong>{{ if .Inventory.Agent.AutoUpdate.Enabled }}enabled{{ else }}disabled{{ end }}</strong> <span class="muted">({{ .Inventory.Agent.AutoUpdate.Override }})</span></p>

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"insylus/internal/shared"
+	"insylus/internal/version"
 )
 
 func TestCreateSSHKeyStoresFingerprint(t *testing.T) {
@@ -140,6 +141,51 @@ func TestSetDeviceModeAccessManagedStartsDisabled(t *testing.T) {
 	}
 	if record.Policy.DeviceMode != shared.DeviceModeAccessManaged || record.Policy.ManagedAccountEnabled || record.Policy.AccessMode != shared.AccessModeDisabled || record.Policy.SSHKeyID != nil {
 		t.Fatalf("expected access-managed to start disabled, got %+v", record.Policy)
+	}
+}
+
+func TestUpdateCheckInClearsStaleAgentUpdateFailureWhenCurrent(t *testing.T) {
+	store := openTestStore(t)
+	defer store.Close()
+
+	device, err := store.CreateDevice(context.Background(), "MiscServer")
+	if err != nil {
+		t.Fatalf("CreateDevice: %v", err)
+	}
+	if err := store.RecordAgentUpdateCheck(context.Background(), device.ID, true, true, version.AgentVersion, string(shared.AgentUpdateStatusAvailable), "", "linux", "amd64"); err != nil {
+		t.Fatalf("RecordAgentUpdateCheck: %v", err)
+	}
+	if err := store.SaveAgentUpdateStatus(context.Background(), device.ID, shared.AgentUpdateReport{
+		Status:             shared.AgentUpdateStatusFailed,
+		Error:              `validate updated agent version: got "0.1.15" want "` + version.AgentVersion + `"`,
+		ServerAgentVersion: version.AgentVersion,
+		AttemptedAt:        time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("SaveAgentUpdateStatus: %v", err)
+	}
+
+	if err := store.UpdateCheckIn(context.Background(), device.ID, shared.HealthSnapshot{
+		Hostname:     "miscserver",
+		IPs:          []string{"10.10.10.22"},
+		AgentVersion: version.AgentVersion,
+		AgentGOOS:    "linux",
+		AgentGOARCH:  "amd64",
+	}, shared.AgentInstallPaths{}); err != nil {
+		t.Fatalf("UpdateCheckIn: %v", err)
+	}
+
+	record, err := store.GetDevice(context.Background(), device.ID)
+	if err != nil {
+		t.Fatalf("GetDevice: %v", err)
+	}
+	if record.Update.Status != shared.AgentUpdateStatusIdle {
+		t.Fatalf("expected stale update status to reset to idle, got %q", record.Update.Status)
+	}
+	if record.Update.Error != "" {
+		t.Fatalf("expected stale update error to be cleared, got %q", record.Update.Error)
+	}
+	if record.Update.UpdateAvailable {
+		t.Fatal("expected update_available to be false after current-version check-in")
 	}
 }
 

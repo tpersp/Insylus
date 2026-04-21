@@ -100,6 +100,55 @@ func New(cfg Config, logger *log.Logger) (*App, error) {
 		"isOnline": func(t time.Time) bool {
 			return deviceIsOnline(t)
 		},
+		"agentHealthLabel": func(t time.Time) string {
+			if t.IsZero() {
+				return "unknown"
+			}
+			if deviceIsOnline(t) {
+				return "healthy"
+			}
+			return "offline"
+		},
+		"agentHealthClass": func(t time.Time) string {
+			if t.IsZero() {
+				return "pill-muted"
+			}
+			if deviceIsOnline(t) {
+				return "pill-ok"
+			}
+			return "pill-danger"
+		},
+		"agentUpdateLabel": func(info shared.AgentUpdateInfo) string {
+			switch info.Status {
+			case shared.AgentUpdateStatusFailed:
+				return "failed"
+			case shared.AgentUpdateStatusUnsupported:
+				return "unsupported"
+			case shared.AgentUpdateStatusUpdating:
+				return "updating"
+			}
+			if info.UpdateAvailable {
+				return "update available"
+			}
+			if info.Status == shared.AgentUpdateStatusUpdated || info.ServerVersion != "" {
+				return "up to date"
+			}
+			return "idle"
+		},
+		"agentUpdateClass": func(info shared.AgentUpdateInfo) string {
+			switch info.Status {
+			case shared.AgentUpdateStatusFailed:
+				return "pill-danger"
+			case shared.AgentUpdateStatusUnsupported:
+				return "pill-muted"
+			case shared.AgentUpdateStatusUpdating, shared.AgentUpdateStatusAvailable:
+				return "pill-warn"
+			}
+			if info.UpdateAvailable {
+				return "pill-warn"
+			}
+			return "pill-ok"
+		},
 		"isSelectedMode": func(current shared.AccessMode, want string) bool {
 			return string(current) == want
 		},

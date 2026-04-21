@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"insylus/internal/shared"
+	"insylus/internal/version"
 
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/ssh"
@@ -1352,6 +1353,15 @@ func (s *Store) UpdateCheckIn(ctx context.Context, deviceID string, health share
 		set reported_goos = ?, reported_goarch = ?, updated_at = ?
 		where device_id = ?`, health.AgentGOOS, health.AgentGOARCH, now.Format(time.RFC3339), deviceID); err != nil {
 		return err
+	}
+	if strings.TrimSpace(health.AgentVersion) != "" && compareVersions(health.AgentVersion, version.AgentVersion) >= 0 {
+		if _, err := s.db.ExecContext(ctx, `
+			update device_agent_updates
+			set update_available = 0, status = ?, error = '', updated_at = ?
+			where device_id = ?`,
+			string(shared.AgentUpdateStatusIdle), now.Format(time.RFC3339), deviceID); err != nil {
+			return err
+		}
 	}
 	if err := s.saveAgentInstallPaths(ctx, deviceID, install, now); err != nil {
 		return err
