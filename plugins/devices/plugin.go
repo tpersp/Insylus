@@ -43,7 +43,15 @@ func (Plugin) Register(host pluginhost.Host) error {
 		if err != nil {
 			return err
 		}
-		rt := runtime{targets: host.Targets(), inventory: host.Data().Inventory(), managed: managedProvider(host), render: host.Web().Render}
+		rt := runtime{
+			db:        host.DB(),
+			targets:   host.Targets(),
+			inventory: host.Data().Inventory(),
+			managed:   managedProvider(host),
+			admin:     deviceAdminProvider(host),
+			plugins:   host.Plugins(),
+			render:    host.Web().Render,
+		}
 		host.Web().NavItem(pluginhost.NavItem{PluginID: "devices", Label: "Devices", Href: "/devices", Order: 10})
 		host.Web().Templates(templateFS, "templates/*.html")
 		host.Web().HandleFunc("GET /devices", rt.handleTargetsPage)
@@ -51,10 +59,18 @@ func (Plugin) Register(host pluginhost.Host) error {
 		host.Web().HandleFunc("GET /devices/{id}", rt.handleTargetPage)
 		host.Web().HandleFunc("POST /devices/{id}", rt.handleUpdateTarget)
 		host.Web().HandleFunc("POST /devices/{id}/note", rt.handleUpdateTargetNote)
+		host.Web().HandleFunc("POST /devices/{id}/topology", rt.handleUpdateTargetTopology)
 		host.Web().HandleFunc("POST /devices/{id}/delete", rt.handleDeleteTarget)
 	}
 	if host.API().Enabled() {
-		rt := runtime{targets: host.Targets(), inventory: host.Data().Inventory(), managed: managedProvider(host)}
+		rt := runtime{
+			db:        host.DB(),
+			targets:   host.Targets(),
+			inventory: host.Data().Inventory(),
+			managed:   managedProvider(host),
+			admin:     deviceAdminProvider(host),
+			plugins:   host.Plugins(),
+		}
 		host.API().HandleFunc("GET /api/devices", rt.handleTargetsAPI)
 		host.API().HandleFunc("GET /api/devices/find", rt.handleTargetFindAPI)
 		host.API().HandleFunc("GET /api/devices/{id}", rt.handleTargetAPI)
@@ -66,6 +82,15 @@ func managedProvider(host pluginhost.Host) shared.ManagedAccountConfigProvider {
 	if provider, ok := host.Capabilities().Lookup("managed_account_config_provider"); ok {
 		if managed, ok := provider.(shared.ManagedAccountConfigProvider); ok {
 			return managed
+		}
+	}
+	return nil
+}
+
+func deviceAdminProvider(host pluginhost.Host) pluginhost.DeviceAdminService {
+	if provider, ok := host.Capabilities().Lookup("device_admin_service"); ok {
+		if admin, ok := provider.(pluginhost.DeviceAdminService); ok {
+			return admin
 		}
 	}
 	return nil

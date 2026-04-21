@@ -31,6 +31,11 @@
           <p class="eyebrow">Fleet</p>
           <h2>Devices</h2>
         </div>
+        <div class="section-actions">
+          <a class="button-secondary" href="/api/devices?view=compact">Compact JSON</a>
+          <a class="button-secondary" href="/api/devices?view=info">Info JSON</a>
+          <a class="button-secondary" href="/api/devices?view=full">Full JSON</a>
+        </div>
       </div>
       <form method="get" action="/devices" class="quick-add">
         <label>Find device <input type="search" name="q" value="{{ .Query }}" placeholder="name, hostname, IP, kind, tag"></label>

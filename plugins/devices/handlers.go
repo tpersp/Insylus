@@ -13,10 +13,28 @@ import (
 )
 
 type runtime struct {
+	db        pluginhost.DBHost
 	targets   pluginhost.TargetService
 	inventory pluginhost.InventoryService
 	managed   shared.ManagedAccountConfigProvider
+	admin     pluginhost.DeviceAdminService
+	plugins   pluginhost.PluginRegistry
 	render    func(http.ResponseWriter, string, any)
+}
+
+type enabledPlugins struct {
+	Access bool
+	Agent  bool
+	Wake   bool
+}
+
+type targetPageData struct {
+	Target       pluginhost.Target
+	Inventory    *shared.DeviceInventoryItem
+	OtherDevices []pluginhost.InventoryDevice
+	Keys         []shared.SSHKey
+	ManagedUser  string
+	Plugins      enabledPlugins
 }
 
 func (rt runtime) handleTargetsPage(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +66,12 @@ func (rt runtime) handleTargetPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	rt.render(w, "target.html", map[string]any{"Target": target})
+	data, err := rt.targetPageData(r.Context(), target)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	rt.render(w, "target.html", data)
 }
 
 func (rt runtime) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
@@ -91,8 +114,29 @@ func (rt runtime) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (rt runtime) handleUpdateTargetNote(w http.ResponseWriter, r *http.Request) {
-	target, err := rt.targets.Get(r.Context(), r.PathValue("id"))
-	if err != nil {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	note := r.FormValue("note")
+	if rt.admin != nil {
+		if err := rt.admin.UpdateNote(r.Context(), r.PathValue("id"), note); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				http.NotFound(w, r)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else if err := rt.updateTargetNoteOnly(r.Context(), r.PathValue("id"), note); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	http.Redirect(w, r, "/devices/"+r.PathValue("id"), http.StatusSeeOther)
+}
+
+func (rt runtime) handleUpdateTargetTopology(w http.ResponseWriter, r *http.Request) {
+	if rt.admin == nil {
 		http.NotFound(w, r)
 		return
 	}
@@ -100,22 +144,77 @@ func (rt runtime) handleUpdateTargetNote(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	input := pluginhost.TargetInput{
-		Name:     target.Name,
-		Kind:     target.Kind,
-		Hostname: target.Hostname,
-		IPs:      target.IPs,
-		APIURL:   target.APIURL,
-		SSHHost:  target.SSHHost,
-		SSHUser:  target.SSHUser,
-		Tags:     target.Tags,
-		Note:     r.FormValue("note"),
-	}
-	if _, err := rt.targets.Update(r.Context(), target.ID, input); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	deviceID := r.PathValue("id")
+	action := strings.TrimSpace(r.FormValue("action"))
+	switch action {
+	case "set-type":
+		raw := strings.TrimSpace(r.FormValue("device_type"))
+		if raw == "" || raw == string(shared.DeviceTypeUnknown) {
+			if err := rt.admin.SetTypeOverride(r.Context(), deviceID, nil); err != nil {
+				rt.writeTopologyError(w, r, err)
+				return
+			}
+			break
+		}
+		deviceType := shared.DeviceType(raw)
+		if err := rt.admin.SetTypeOverride(r.Context(), deviceID, &deviceType); err != nil {
+			rt.writeTopologyError(w, r, err)
+			return
+		}
+	case "clear-type":
+		if err := rt.admin.SetTypeOverride(r.Context(), deviceID, nil); err != nil {
+			rt.writeTopologyError(w, r, err)
+			return
+		}
+	case "set-purpose":
+		raw := strings.TrimSpace(r.FormValue("purpose"))
+		if raw == "" || raw == string(shared.DevicePurposeUnknown) {
+			if err := rt.admin.SetPurposeOverride(r.Context(), deviceID, nil); err != nil {
+				rt.writeTopologyError(w, r, err)
+				return
+			}
+			break
+		}
+		purpose := shared.DevicePurpose(raw)
+		if err := rt.admin.SetPurposeOverride(r.Context(), deviceID, &purpose); err != nil {
+			rt.writeTopologyError(w, r, err)
+			return
+		}
+	case "clear-purpose":
+		if err := rt.admin.SetPurposeOverride(r.Context(), deviceID, nil); err != nil {
+			rt.writeTopologyError(w, r, err)
+			return
+		}
+	case "set-parent-device":
+		parentID := strings.TrimSpace(r.FormValue("parent_device_id"))
+		if parentID == "" {
+			http.Error(w, "parent device is required", http.StatusBadRequest)
+			return
+		}
+		if err := rt.admin.SetParentOverride(r.Context(), deviceID, shared.ParentOverrideManualDevice, &parentID); err != nil {
+			rt.writeTopologyError(w, r, err)
+			return
+		}
+	case "set-parent-unknown":
+		if err := rt.admin.SetParentOverride(r.Context(), deviceID, shared.ParentOverrideManualUnknown, nil); err != nil {
+			rt.writeTopologyError(w, r, err)
+			return
+		}
+	case "set-parent-none":
+		if err := rt.admin.SetParentOverride(r.Context(), deviceID, shared.ParentOverrideManualNone, nil); err != nil {
+			rt.writeTopologyError(w, r, err)
+			return
+		}
+	case "clear-parent":
+		if err := rt.admin.SetParentOverride(r.Context(), deviceID, shared.ParentOverrideInherit, nil); err != nil {
+			rt.writeTopologyError(w, r, err)
+			return
+		}
+	default:
+		http.Error(w, "invalid topology action", http.StatusBadRequest)
 		return
 	}
-	http.Redirect(w, r, "/devices/"+target.ID, http.StatusSeeOther)
+	http.Redirect(w, r, "/devices/"+deviceID, http.StatusSeeOther)
 }
 
 func (rt runtime) handleDeleteTarget(w http.ResponseWriter, r *http.Request) {
@@ -209,6 +308,93 @@ func (rt runtime) managedUser(ctx context.Context) (string, error) {
 		return shared.DefaultManagedUser, nil
 	}
 	return strings.TrimSpace(cfg.ManagedUser), nil
+}
+
+func (rt runtime) targetPageData(ctx context.Context, target pluginhost.Target) (targetPageData, error) {
+	data := targetPageData{
+		Target: target,
+		Plugins: enabledPlugins{
+			Access: rt.plugins.Enabled("access"),
+			Agent:  rt.plugins.Enabled("agent"),
+			Wake:   rt.plugins.Enabled("wake"),
+		},
+	}
+	managedUser, err := rt.managedUser(ctx)
+	if err != nil {
+		return targetPageData{}, err
+	}
+	data.ManagedUser = managedUser
+	if data.Plugins.Access {
+		data.Keys, err = rt.listSSHKeys(ctx)
+		if err != nil {
+			return targetPageData{}, err
+		}
+	}
+	devices, err := rt.inventory.ListDevices(ctx)
+	if err == nil {
+		for _, device := range devices {
+			if device.ID == target.ID {
+				continue
+			}
+			data.OtherDevices = append(data.OtherDevices, device)
+		}
+	}
+	item, err := rt.inventory.GetInventory(ctx, target.ID, "full", managedUser)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return data, nil
+		}
+		return targetPageData{}, err
+	}
+	if inv, ok := item.(shared.DeviceInventoryItem); ok {
+		data.Inventory = &inv
+	}
+	return data, nil
+}
+
+func (rt runtime) updateTargetNoteOnly(ctx context.Context, targetID, note string) error {
+	target, err := rt.targets.Get(ctx, targetID)
+	if err != nil {
+		return err
+	}
+	_, err = rt.targets.Update(ctx, targetID, pluginhost.TargetInput{
+		Name:     target.Name,
+		Kind:     target.Kind,
+		Hostname: target.Hostname,
+		IPs:      target.IPs,
+		APIURL:   target.APIURL,
+		SSHHost:  target.SSHHost,
+		SSHUser:  target.SSHUser,
+		Tags:     target.Tags,
+		Note:     note,
+	})
+	return err
+}
+
+func (rt runtime) listSSHKeys(ctx context.Context) ([]shared.SSHKey, error) {
+	rows, err := rt.db.QueryContext(ctx, `select id, name, public_key, fingerprint, created_at from ssh_keys order by name asc`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var keys []shared.SSHKey
+	for rows.Next() {
+		var key shared.SSHKey
+		var createdAt string
+		if err := rows.Scan(&key.ID, &key.Name, &key.PublicKey, &key.Fingerprint, &createdAt); err != nil {
+			return nil, err
+		}
+		keys = append(keys, key)
+	}
+	return keys, rows.Err()
+}
+
+func (rt runtime) writeTopologyError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, sql.ErrNoRows) {
+		http.NotFound(w, r)
+		return
+	}
+	http.Error(w, err.Error(), http.StatusBadRequest)
 }
 
 func inventoryViewFromRequest(w http.ResponseWriter, r *http.Request, fallback string) (string, bool) {

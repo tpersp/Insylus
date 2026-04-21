@@ -10,8 +10,85 @@
 <body>
   {{ template "header" . }}
   <main class="page">
-    <section class="section-grid">
-      <article class="panel">
+    <div class="page-title">
+      <div>
+        <p class="eyebrow">Device</p>
+        <h2>{{ .Target.Name }}</h2>
+        <div class="title-meta">
+          <span>{{ if .Target.Hostname }}{{ .Target.Hostname }}{{ else }}pending hostname{{ end }}</span>
+          {{ if .Inventory }}
+          <span>{{ if .Inventory.Identity.OSName }}{{ .Inventory.Identity.OSName }}{{ else }}unknown OS{{ end }}</span>
+          <span class="{{ staleClass .Inventory.Identity.LastSeenAt }}">Seen {{ formatTime .Inventory.Identity.LastSeenAt }}</span>
+          {{ else }}
+          <span class="muted">agent not enrolled yet</span>
+          {{ end }}
+        </div>
+      </div>
+      <div class="title-actions">
+        {{ if .Plugins.Wake }}
+          {{ if .Inventory }}
+            {{ if and .Inventory.WakeOnLAN.Enabled (isOnline .Inventory.Identity.LastSeenAt) }}
+            <button type="button" class="button-secondary" disabled>Already on</button>
+            {{ else if .Inventory.WakeOnLAN.Enabled }}
+            <form method="post" action="/devices/{{ .Target.ID }}/wake" class="inline-form">
+              <button type="submit">Wake device</button>
+            </form>
+            {{ else }}
+            <button type="button" class="button-secondary" disabled>Wake unavailable</button>
+            {{ end }}
+          {{ else }}
+          <button type="button" class="button-secondary" disabled>Wake unavailable</button>
+          {{ end }}
+        {{ end }}
+        <a class="button-link" href="/devices/{{ .Target.ID }}/install">Install agent</a>
+        <form method="post" action="/devices/{{ .Target.ID }}/delete" class="inline-form" onsubmit="return confirm('Delete this target? This cannot be undone.');">
+          <button type="submit" class="button-secondary">Delete target</button>
+        </form>
+      </div>
+    </div>
+
+    {{ if .Inventory }}
+    <section class="stat-grid">
+      <div class="stat-card">
+        <span class="stat-label">Mode</span>
+        <strong>{{ if eq .Inventory.Access.DeviceMode "access-managed" }}Access managed{{ else }}Inventory only{{ end }}</strong>
+        <span class="subtle">{{ if eq .Inventory.Access.DeviceMode "access-managed" }}policy enforcement enabled{{ else }}no access changes{{ end }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Type</span>
+        <strong>{{ .Inventory.Topology.DeviceType }}</strong>
+        <span class="subtle">{{ .Inventory.Topology.DeviceTypeSource }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Purpose</span>
+        <strong>{{ if eq .Inventory.Topology.Purpose "unknown" }}Unknown{{ else }}{{ .Inventory.Topology.Purpose }}{{ end }}</strong>
+        <span class="subtle">{{ .Inventory.Topology.PurposeSource }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Parent</span>
+        <strong>{{ if eq .Inventory.Topology.ParentState "linked" }}{{ .Inventory.Topology.ParentName }}{{ else if eq .Inventory.Topology.ParentState "unknown" }}Unknown{{ else }}None{{ end }}</strong>
+        <span class="subtle">{{ .Inventory.Topology.ParentSource }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Agent</span>
+        <strong>{{ if .Inventory.Agent.Version }}{{ .Inventory.Agent.Version }}{{ else }}unknown{{ end }}</strong>
+        <span class="subtle">{{ if .Inventory.Agent.AutoUpdate.Enabled }}auto-update enabled{{ else }}auto-update disabled{{ end }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Wake On LAN</span>
+        <strong>{{ if and .Inventory.WakeOnLAN.Enabled (isOnline .Inventory.Identity.LastSeenAt) }}Already on{{ else if .Inventory.WakeOnLAN.Enabled }}Available{{ else }}Unavailable{{ end }}</strong>
+        <span class="subtle">
+          {{ if and .Inventory.WakeOnLAN.Enabled (isOnline .Inventory.Identity.LastSeenAt) }}wake is not needed
+          {{ else if .Inventory.WakeOnLAN.Reason }}{{ .Inventory.WakeOnLAN.Reason }}
+          {{ else if .Inventory.WakeOnLAN.Interface }}{{ .Inventory.WakeOnLAN.Interface }}
+          {{ else }}no wakeable interface reported{{ end }}
+        </span>
+      </div>
+    </section>
+    {{ end }}
+
+    <section class="grid">
+      <div class="panel">
         <div class="section-heading">
           <div>
             <p class="eyebrow">Connection</p>
@@ -19,18 +96,27 @@
           </div>
           <span class="pill">{{ if .Target.Kind }}{{ .Target.Kind }}{{ else }}target{{ end }}</span>
         </div>
-        <div class="section-actions">
-          <a class="button-link" href="/devices/{{ .Target.ID }}/install">Install agent</a>
-          <form method="post" action="/devices/{{ .Target.ID }}/delete" class="inline-form" onsubmit="return confirm('Delete this target? This cannot be undone.');">
-            <button type="submit" class="button-secondary">Delete target</button>
-          </form>
-        </div>
         <div class="facts">
+          <p><span>ID</span><code>{{ .Target.ID }}</code></p>
           <p><span>API URL</span>{{ if .Target.APIURL }}<code>{{ .Target.APIURL }}</code>{{ else }}<span class="muted">none</span>{{ end }}</p>
           <p><span>SSH host</span>{{ if .Target.SSHHost }}<code>{{ .Target.SSHHost }}</code>{{ else }}<span class="muted">none</span>{{ end }}</p>
           <p><span>SSH user</span>{{ if .Target.SSHUser }}<code>{{ .Target.SSHUser }}</code>{{ else }}<span class="muted">none</span>{{ end }}</p>
           <p><span>IPs</span><span>{{ range .Target.IPs }}<code>{{ . }}</code> {{ else }}none{{ end }}</span></p>
           <p><span>Tags</span><span>{{ range .Target.Tags }}<span class="pill">{{ . }}</span> {{ else }}none{{ end }}</span></p>
+          {{ if .Inventory }}
+            {{ if .Inventory.Connection.SSHAlias }}
+            <p><span>Managed SSH</span><code>{{ .Inventory.Connection.SSHAlias }}</code></p>
+            <p><span>SSH command</span><code>{{ .Inventory.Connection.SSHCommand }}</code></p>
+            {{ else }}
+            <p><span>Managed SSH</span><strong>Unavailable</strong></p>
+            <p><span>Reason</span><span class="muted">
+              {{ if ne .Inventory.Access.DeviceMode "access-managed" }}Inventory-only devices do not expose an Insylus-managed SSH command.
+              {{ else if not .Inventory.Access.ManagedAccountEnabled }}Managed access is not enabled.
+              {{ else if eq .Inventory.Access.AccessMode "disabled" }}Access mode is disabled.
+              {{ else }}No device IP has been reported yet.{{ end }}
+            </span></p>
+            {{ end }}
+          {{ end }}
         </div>
         <details class="edit-drawer">
           <summary>Edit connection</summary>
@@ -43,105 +129,294 @@
             <label>SSH host <input type="text" name="ssh_host" value="{{ .Target.SSHHost }}" placeholder="ssh alias, hostname, or IP"></label>
             <label>SSH user <input type="text" name="ssh_user" value="{{ .Target.SSHUser }}" placeholder="operator"></label>
             <label>Tags <input type="text" name="tags" value="{{ range $i, $tag := .Target.Tags }}{{ if $i }}, {{ end }}{{ $tag }}{{ end }}" placeholder="lab, media, rack-1"></label>
-            <label>Note <textarea name="note" rows="4">{{ .Target.Note }}</textarea></label>
             <button type="submit">Save device</button>
           </form>
         </details>
-      </article>
-      <article class="panel">
+      </div>
+
+      <div class="panel">
         <div class="section-heading">
           <div>
             <p class="eyebrow">Operator Context</p>
-            <h2>Notes</h2>
+            <h2>Note</h2>
           </div>
         </div>
-        <form method="post" action="/devices/{{ .Target.ID }}/note" class="settings-form">
-          <textarea name="note" rows="6">{{ .Target.Note }}</textarea>
-          <button type="submit">Save note</button>
-        </form>
-      </article>
+        {{ if and .Inventory .Inventory.Identity.Note }}
+        <p class="note">{{ .Inventory.Identity.Note }}</p>
+        {{ else if .Target.Note }}
+        <p class="note">{{ .Target.Note }}</p>
+        {{ else }}
+        <p class="muted">No note yet.</p>
+        {{ end }}
+        <details class="edit-drawer">
+          <summary>Edit note</summary>
+          <form method="post" action="/devices/{{ .Target.ID }}/note" class="stack compact-form">
+            <label>Note
+              <textarea name="note" rows="5" placeholder="All containers should be available in dockge">{{ if and .Inventory .Inventory.Identity.Note }}{{ .Inventory.Identity.Note }}{{ else }}{{ .Target.Note }}{{ end }}</textarea>
+            </label>
+            <button type="submit">Save note</button>
+          </form>
+        </details>
+      </div>
     </section>
-    <section class="panel" id="access-policy-panel" data-device-id="{{ .Target.ID }}">
+
+    {{ if .Inventory }}
+    <section class="grid">
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Device Mode</p>
+            <h2>{{ if eq .Inventory.Access.DeviceMode "access-managed" }}Access Managed{{ else }}Inventory Only{{ end }}</h2>
+          </div>
+          <span class="pill {{ if eq .Inventory.Access.DeviceMode "access-managed" }}pill-ok{{ else }}pill-muted{{ end }}">{{ .Inventory.Access.DeviceMode }}</span>
+        </div>
+        {{ if eq .Inventory.Access.DeviceMode "access-managed" }}
+        <p>Insylus may enforce the managed account policy on this device according to the access settings below.</p>
+        {{ else }}
+        <p>Insylus will not modify users, SSH keys, sudoers, or groups on this device. Health, topology, workloads, and auto-update still work.</p>
+        {{ end }}
+        {{ if .Plugins.Access }}
+        <details class="edit-drawer">
+          <summary>Edit device mode</summary>
+          <form method="post" action="/devices/{{ .Target.ID }}/mode" class="stack compact-form">
+            <label>Mode
+              <select name="device_mode">
+                <option value="inventory-only" {{ if isSelectedDeviceMode .Inventory.Access.DeviceMode "inventory-only" }}selected{{ end }}>Inventory only</option>
+                <option value="access-managed" {{ if isSelectedDeviceMode .Inventory.Access.DeviceMode "access-managed" }}selected{{ end }}>Access managed</option>
+              </select>
+            </label>
+            <p class="muted">Switching to access-managed starts with managed access disabled. Choose audit or sudo separately after saving.</p>
+            <button type="submit">Save device mode</button>
+          </form>
+        </details>
+        {{ else }}
+        <p class="muted">Enable the Access plugin to change device mode from this page.</p>
+        {{ end }}
+      </div>
+
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Agent</p>
+            <h2>Update State</h2>
+          </div>
+          <span class="pill {{ if .Inventory.Agent.AutoUpdate.UpdateAvailable }}pill-warn{{ else if eq .Inventory.Agent.AutoUpdate.Status "failed" }}pill-danger{{ else }}pill-ok{{ end }}">{{ if .Inventory.Agent.AutoUpdate.Status }}{{ .Inventory.Agent.AutoUpdate.Status }}{{ else }}idle{{ end }}</span>
+        </div>
+        <div class="facts">
+          <p><span>Effective</span><strong>{{ if .Inventory.Agent.AutoUpdate.Enabled }}enabled{{ else }}disabled{{ end }}</strong> <span class="muted">({{ .Inventory.Agent.AutoUpdate.Override }})</span></p>
+          <p><span>Server version</span>{{ if .Inventory.Agent.AutoUpdate.ServerVersion }}{{ .Inventory.Agent.AutoUpdate.ServerVersion }}{{ else }}unknown{{ end }}</p>
+          <p><span>Update available</span>{{ if .Inventory.Agent.AutoUpdate.UpdateAvailable }}yes{{ else }}no{{ end }}</p>
+          <p><span>Platform</span>{{ if .Inventory.Agent.GOOS }}{{ .Inventory.Agent.GOOS }}/{{ .Inventory.Agent.GOARCH }}{{ else }}unknown{{ end }}</p>
+          <p><span>Last checked</span>{{ formatOptionalTime .Inventory.Agent.AutoUpdate.LastCheckedAt }}</p>
+          <p><span>Last error</span>{{ if .Inventory.Agent.AutoUpdate.Error }}{{ .Inventory.Agent.AutoUpdate.Error }}{{ else }}none{{ end }}</p>
+        </div>
+        {{ if .Plugins.Agent }}
+        <details class="edit-drawer">
+          <summary>Edit auto-update</summary>
+          <form method="post" action="/devices/{{ .Target.ID }}/agent-auto-update" class="stack compact-form">
+            <label>Override
+              <select name="agent_auto_update_override">
+                <option value="inherit" {{ if eq .Inventory.Agent.AutoUpdate.Override "inherit" }}selected{{ end }}>inherit global default</option>
+                <option value="enabled" {{ if eq .Inventory.Agent.AutoUpdate.Override "enabled" }}selected{{ end }}>enabled</option>
+                <option value="disabled" {{ if eq .Inventory.Agent.AutoUpdate.Override "disabled" }}selected{{ end }}>disabled</option>
+              </select>
+            </label>
+            <button type="submit">Save auto-update setting</button>
+          </form>
+        </details>
+        {{ else }}
+        <p class="muted">Enable the Agent plugin to edit per-device auto-update from this page.</p>
+        {{ end }}
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Topology</p>
+            <h2>Relationships</h2>
+          </div>
+          <span class="pill">{{ .Inventory.Topology.ParentState }}</span>
+        </div>
+        <div class="facts">
+          <p><span>Type</span><strong>{{ .Inventory.Topology.DeviceType }}</strong> <span class="muted">({{ .Inventory.Topology.DeviceTypeSource }})</span></p>
+          <p><span>Purpose</span><strong>{{ if eq .Inventory.Topology.Purpose "unknown" }}Unknown{{ else }}{{ .Inventory.Topology.Purpose }}{{ end }}</strong> <span class="muted">({{ .Inventory.Topology.PurposeSource }})</span></p>
+          <p><span>Parent</span><strong>{{ if eq .Inventory.Topology.ParentState "linked" }}{{ .Inventory.Topology.ParentName }}{{ else if eq .Inventory.Topology.ParentState "unknown" }}Unknown{{ else }}None{{ end }}</strong> <span class="muted">({{ .Inventory.Topology.ParentSource }})</span></p>
+          <p><span>Children</span>{{ if .Inventory.Topology.Children }}{{ range $i, $child := .Inventory.Topology.Children }}{{ if $i }}, {{ end }}{{ $child }}{{ end }}{{ else }}none{{ end }}</p>
+          <p><span>Discovery</span>{{ formatTime .Inventory.Topology.LastDiscoveredAt }}</p>
+        </div>
+        <details class="edit-drawer">
+          <summary>Edit topology overrides</summary>
+          <form method="post" action="/devices/{{ .Target.ID }}/topology" class="stack compact-form">
+            <input type="hidden" name="action" value="set-type">
+            <label>Type override
+              <select name="device_type">
+                <option value="unknown">auto</option>
+                <option value="bare-metal" {{ if isSelectedDeviceType .Inventory.Topology.DeviceType "bare-metal" }}selected{{ end }}>bare-metal</option>
+                <option value="vm" {{ if isSelectedDeviceType .Inventory.Topology.DeviceType "vm" }}selected{{ end }}>vm</option>
+                <option value="lxc" {{ if isSelectedDeviceType .Inventory.Topology.DeviceType "lxc" }}selected{{ end }}>lxc</option>
+                <option value="container" {{ if isSelectedDeviceType .Inventory.Topology.DeviceType "container" }}selected{{ end }}>container</option>
+              </select>
+            </label>
+            <button type="submit">Save type override</button>
+          </form>
+          <form method="post" action="/devices/{{ .Target.ID }}/topology" class="stack compact-form">
+            <input type="hidden" name="action" value="set-purpose">
+            <label>Purpose override
+              <input name="purpose" list="purpose-suggestions" maxlength="80" placeholder="OpenClaw host, Discord bot, living picture frame" value="{{ if eq .Inventory.Topology.PurposeSource "manual" }}{{ .Inventory.Topology.Purpose }}{{ end }}">
+              <datalist id="purpose-suggestions">
+                <option value="OpenClaw host">
+                <option value="Coding server">
+                <option value="Discord bot">
+                <option value="Living picture frame">
+                <option value="docker-host">
+                <option value="proxmox-node">
+              </datalist>
+            </label>
+            <button type="submit">Save purpose override</button>
+          </form>
+          <form method="post" action="/devices/{{ .Target.ID }}/topology" class="stack compact-form">
+            <input type="hidden" name="action" value="set-parent-device">
+            <label>Parent override
+              <select name="parent_device_id">
+                <option value="">select device</option>
+                {{ range .OtherDevices }}
+                <option value="{{ .ID }}">{{ .Name }}</option>
+                {{ end }}
+              </select>
+            </label>
+            <button type="submit">Set parent override</button>
+          </form>
+          <form method="post" action="/devices/{{ .Target.ID }}/topology" class="actions-grid">
+            <button type="submit" class="button-secondary" name="action" value="set-parent-unknown">Parent Unknown</button>
+            <button type="submit" class="button-secondary" name="action" value="set-parent-none">Parent None</button>
+            <button type="submit" class="button-secondary" name="action" value="clear-parent">Clear parent</button>
+            <button type="submit" class="button-secondary" name="action" value="clear-type">Clear type</button>
+            <button type="submit" class="button-secondary" name="action" value="clear-purpose">Clear purpose</button>
+          </form>
+        </details>
+      </div>
+
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Access</p>
+            <h2>Desired Policy</h2>
+          </div>
+          <span class="pill {{ if .Inventory.Access.EnforcementSucceeded }}pill-ok{{ else }}pill-warn{{ end }}">{{ if .Inventory.Access.EnforcementSucceeded }}ok{{ else }}pending/error{{ end }}</span>
+        </div>
+        <div class="facts">
+          <p><span>Device mode</span><strong>{{ if eq .Inventory.Access.DeviceMode "access-managed" }}Access managed{{ else }}Inventory only{{ end }}</strong></p>
+          <p><span>Access mode</span><strong>{{ if .Inventory.Access.AccessMode }}{{ .Inventory.Access.AccessMode }}{{ else }}disabled{{ end }}</strong></p>
+          <p><span>Managed user</span><strong>{{ .ManagedUser }}</strong></p>
+          <p><span>Revision</span>{{ .Inventory.Access.AppliedRevision }} / {{ .Inventory.Access.PolicyRevision }}</p>
+          <p><span>Assigned key</span>{{ if .Inventory.Access.AssignedKeyName }}{{ .Inventory.Access.AssignedKeyName }}{{ else }}none{{ end }}</p>
+          <p><span>Fingerprint</span>{{ if .Inventory.Access.AssignedFingerprint }}<code>{{ .Inventory.Access.AssignedFingerprint }}</code>{{ else }}none{{ end }}</p>
+          <p><span>Last error</span>{{ if .Inventory.Access.ErrorMessage }}{{ .Inventory.Access.ErrorMessage }}{{ else }}none{{ end }}</p>
+        </div>
+        {{ if .Plugins.Access }}
+          {{ if eq .Inventory.Access.DeviceMode "access-managed" }}
+          <details class="edit-drawer">
+            <summary>Edit access policy</summary>
+            <form method="post" action="/devices/{{ .Target.ID }}/policy" class="stack compact-form">
+              <label><input type="checkbox" name="managed_account_enabled" {{ if .Inventory.Access.ManagedAccountEnabled }}checked{{ end }}> Link or create managed user <code>{{ .ManagedUser }}</code></label>
+              <label>Access level
+                <select name="access_mode">
+                  <option value="audit" {{ if isSelectedMode .Inventory.Access.AccessMode "audit" }}selected{{ end }}>audit - Read system logs</option>
+                  <option value="docker" {{ if isSelectedMode .Inventory.Access.AccessMode "docker" }}selected{{ end }}>docker - Manage containers</option>
+                  <option value="sudo_prompted" {{ if isSelectedMode .Inventory.Access.AccessMode "sudo_prompted" }}selected{{ end }}>sudo (prompted) - Full admin access</option>
+                  <option value="sudo_passwordless" {{ if isSelectedMode .Inventory.Access.AccessMode "sudo_passwordless" }}selected{{ end }}>sudo (passwordless) - Full admin access</option>
+                </select>
+              </label>
+              <label>SSH key
+                <select name="ssh_key_id">
+                  <option value="">none</option>
+                  {{ range .Keys }}
+                  <option value="{{ .ID }}" {{ if eq $.Inventory.Access.AssignedFingerprint .Fingerprint }}selected{{ end }}>{{ .Name }} ({{ .Fingerprint }})</option>
+                  {{ end }}
+                </select>
+              </label>
+              <button type="submit">Save policy</button>
+            </form>
+          </details>
+          {{ else }}
+          <p class="muted">Switch this device to access-managed mode before editing managed user access.</p>
+          {{ end }}
+        {{ else }}
+        <p class="muted">Enable the Access plugin to edit managed user policy from this page.</p>
+        {{ end }}
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Health</p>
+            <h2>Last Report</h2>
+          </div>
+        </div>
+        <div class="facts">
+          <p><span>Load</span>{{ if .Inventory.Health.LoadAverage }}{{ .Inventory.Health.LoadAverage }}{{ else }}unknown{{ end }}</p>
+          <p><span>Memory</span>{{ if .Inventory.Health.MemoryUsed }}{{ .Inventory.Health.MemoryUsed }}{{ else }}unknown{{ end }}</p>
+          <p><span>Disk</span>{{ if .Inventory.Health.DiskUsed }}{{ .Inventory.Health.DiskUsed }}{{ else }}unknown{{ end }}</p>
+          <p><span>Uptime</span>{{ if .Inventory.Health.Uptime }}{{ .Inventory.Health.Uptime }}{{ else }}unknown{{ end }}</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Discovery</p>
+            <h2>Warnings</h2>
+          </div>
+        </div>
+        {{ if .Inventory.Inventory.DiscoveryWarnings }}
+        <ul>
+          {{ range .Inventory.Inventory.DiscoveryWarnings }}
+          <li>{{ . }}</li>
+          {{ end }}
+        </ul>
+        {{ else }}
+        <p>None.</p>
+        {{ end }}
+      </div>
+    </section>
+
+    <section class="panel">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">Access</p>
-          <h2>Managed User Policy</h2>
+          <p class="eyebrow">Inventory</p>
+          <h2>Runs On This Device</h2>
         </div>
-        <span class="pill pill-muted" id="access-policy-state">Loading</span>
       </div>
-      <div id="access-policy-body" class="muted">Checking access plugin status...</div>
+      {{ if .Inventory.Inventory.Workloads }}
+      <ul class="workload-list">
+        {{ range .Inventory.Inventory.Workloads }}
+        <li>
+          <strong>{{ .Name }}</strong>
+          <span>{{ .Kind }}{{ if .State }} - {{ .State }}{{ end }}</span>
+          {{ if .Image }}<code>{{ .Image }}</code>{{ end }}
+        </li>
+        {{ end }}
+      </ul>
+      {{ else }}
+      <p>No workloads discovered yet.</p>
+      {{ end }}
     </section>
+    {{ else }}
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Enrollment</p>
+          <h2>Awaiting Agent Data</h2>
+        </div>
+      </div>
+      <p class="muted">This target has connection details, but no enrolled agent inventory yet. Install the agent to unlock health, topology, access, Wake-on-LAN, and update controls.</p>
+    </section>
+    {{ end }}
   </main>
-  <script>
-    (function() {
-      const panel = document.getElementById('access-policy-panel');
-      if (!panel) return;
-      const deviceID = panel.dataset.deviceId;
-      const body = document.getElementById('access-policy-body');
-      const state = document.getElementById('access-policy-state');
-      Promise.all([
-        fetch('/api/devices/' + encodeURIComponent(deviceID) + '?view=info').then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch('/api/access/keys').then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch('/api/plugins').then(r => r.ok ? r.json() : null).catch(() => null)
-      ]).then(([device, keys, plugins]) => {
-        if (!device || !device.access) {
-          state.textContent = 'Unavailable';
-          body.textContent = 'Access controls are unavailable for this device.';
-          return;
-        }
-        const access = device.access;
-        const accessPlugin = (plugins || []).find(p => p.id === 'access');
-        const accessEnabled = accessPlugin ? accessPlugin.enabled : keys !== null;
-        state.textContent = access.device_mode === 'access-managed' ? 'Access managed' : 'Inventory only';
-        state.className = 'pill ' + (access.device_mode === 'access-managed' ? 'pill-ok' : 'pill-muted');
-        const keyOptions = ['<option value="">none</option>'].concat((keys || []).map(k => {
-          const fingerprint = k.Fingerprint || k.fingerprint || '';
-          const label = escapeHTML((k.Name || k.name || 'key') + ' (' + fingerprint + ')');
-          const selected = fingerprint && fingerprint === access.assigned_fingerprint ? ' selected' : '';
-          return '<option value="' + escapeHTML(k.ID || k.id) + '"' + selected + '>' + label + '</option>';
-        })).join('');
-        body.innerHTML =
-          '<div class="facts">' +
-          '<p><span>Device mode</span><strong>' + escapeHTML(access.device_mode || 'unknown') + '</strong></p>' +
-          '<p><span>Access mode</span><strong>' + escapeHTML(access.access_mode || 'disabled') + '</strong></p>' +
-          '<p><span>Managed user</span><strong>' + escapeHTML(access.managed_user || '') + '</strong></p>' +
-          '<p><span>Assigned key</span>' + escapeHTML(access.assigned_key_name || 'none') + '</p>' +
-          '<p><span>Policy revision</span>' + escapeHTML(access.applied_revision || 0) + ' / ' + escapeHTML(access.policy_revision || 0) + '</p>' +
-          '<p><span>Last error</span>' + escapeHTML(access.error_message || 'none') + '</p>' +
-          '</div>' +
-          (!accessEnabled ? '<p class="muted">Enable the Access plugin to edit managed user policy from this page.</p>' :
-          '<details class="edit-drawer"><summary>Edit device mode</summary>' +
-          '<form method="post" action="/devices/' + encodeURIComponent(deviceID) + '/mode" class="stack compact-form">' +
-          '<label>Mode <select name="device_mode">' +
-          option('inventory-only', 'Inventory only', access.device_mode) +
-          option('access-managed', 'Access managed', access.device_mode) +
-          '</select></label>' +
-          '<button type="submit">Save device mode</button>' +
-          '</form></details>' +
-          (access.device_mode === 'access-managed' ? (
-            '<details class="edit-drawer"><summary>Edit access policy</summary>' +
-            '<form method="post" action="/devices/' + encodeURIComponent(deviceID) + '/policy" class="stack compact-form">' +
-            '<label><input type="checkbox" name="managed_account_enabled" ' + (access.managed_account_enabled ? 'checked' : '') + '> Link or create managed user <code>' + escapeHTML(access.managed_user || '') + '</code></label>' +
-            '<label>Access level <select name="access_mode">' +
-            option('audit', 'audit - Read system logs', access.access_mode) +
-            option('docker', 'docker - Manage containers', access.access_mode) +
-            option('sudo_prompted', 'sudo (prompted) - Full admin access', access.access_mode) +
-            option('sudo_passwordless', 'sudo (passwordless) - Full admin access', access.access_mode) +
-            '</select></label>' +
-            '<label>SSH key <select name="ssh_key_id">' + keyOptions + '</select></label>' +
-            (keys === null ? '<p class="muted">SSH key list is unavailable; saving with none leaves this device without an assigned key.</p>' : '') +
-            '<button type="submit">Save policy</button>' +
-            '</form></details>'
-          ) : '<p class="muted">Switch this device to access-managed mode before editing managed user access.</p>'));
-      });
-      function option(value, label, current) {
-        return '<option value="' + value + '"' + (current === value ? ' selected' : '') + '>' + escapeHTML(label) + '</option>';
-      }
-      function escapeHTML(value) {
-        return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-      }
-    })();
-  </script>
 </body>
 </html>
 {{ end }}
