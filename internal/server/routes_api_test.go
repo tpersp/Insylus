@@ -380,6 +380,8 @@ func TestDiscoveryPluginSortsByIPAndMarksKnownDevices(t *testing.T) {
 	}
 
 	type discoveredCandidate struct {
+		DisplayName   string `json:"display_name"`
+		Hostname      string `json:"hostname"`
 		ID            int64  `json:"id"`
 		IPAddress     string `json:"ip_address"`
 		Status        string `json:"status"`
@@ -395,6 +397,9 @@ func TestDiscoveryPluginSortsByIPAndMarksKnownDevices(t *testing.T) {
 	}
 	if candidates[1].Status != "known" || candidates[1].KnownTargetID != knownTarget.ID {
 		t.Fatalf("expected known device match for 10.10.10.22, got %+v", candidates[1])
+	}
+	if candidates[1].DisplayName != "MiscServer" || candidates[1].Hostname != "miscserver.local" {
+		t.Fatalf("expected known device identity to be reused, got %+v", candidates[1])
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/discovery/"+strconv.FormatInt(candidates[1].ID, 10)+"/promote", nil)

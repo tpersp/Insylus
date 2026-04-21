@@ -365,6 +365,12 @@ func (s store) attachKnownTargets(ctx context.Context, items []candidate) error 
 		}
 		items[i].KnownTargetID = target.ID
 		items[i].KnownTargetName = target.Name
+		if strings.TrimSpace(target.Name) != "" {
+			items[i].DisplayName = target.Name
+		}
+		if strings.TrimSpace(target.Hostname) != "" {
+			items[i].Hostname = target.Hostname
+		}
 		items[i].Status = "known"
 		if items[i].StatusNote == "" {
 			items[i].StatusNote = "already present in devices"
