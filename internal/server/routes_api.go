@@ -49,7 +49,7 @@ func (a *App) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 	if !a.decodeJSON(w, r, &req) {
 		return
 	}
-	if err := a.store.UpdateCheckIn(r.Context(), device.ID, req.Health); err != nil {
+	if err := a.store.UpdateCheckIn(r.Context(), device.ID, req.Health, req.AgentInstall); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

@@ -14,10 +14,10 @@ const (
 type AccessMode string
 
 const (
-	AccessModeDisabled        AccessMode = "disabled"
-	AccessModeAudit           AccessMode = "audit"
-	AccessModeDocker          AccessMode = "docker"
-	AccessModeSudoPrompted    AccessMode = "sudo_prompted"
+	AccessModeDisabled         AccessMode = "disabled"
+	AccessModeAudit            AccessMode = "audit"
+	AccessModeDocker           AccessMode = "docker"
+	AccessModeSudoPrompted     AccessMode = "sudo_prompted"
 	AccessModeSudoPasswordless AccessMode = "sudo_passwordless"
 )
 
@@ -251,6 +251,7 @@ type DeviceReport struct {
 	ErrorMessage           string            `json:"error_message"`
 	LastPolicyHealth       HealthSnapshot    `json:"health"`
 	Topology               TopologyDiscovery `json:"topology"`
+	AgentInstall           AgentInstallPaths `json:"agent_install,omitempty"`
 	AgentUpdate            AgentUpdateReport `json:"agent_update,omitempty"`
 	UpdatedAt              time.Time         `json:"updated_at"`
 }
@@ -269,7 +270,16 @@ type BootstrapResponse struct {
 }
 
 type CheckInRequest struct {
-	Health HealthSnapshot `json:"health"`
+	Health       HealthSnapshot    `json:"health"`
+	AgentInstall AgentInstallPaths `json:"agent_install,omitempty"`
+}
+
+type AgentInstallPaths struct {
+	BinaryPath  string    `json:"binary_path,omitempty"`
+	ConfigPath  string    `json:"config_path,omitempty"`
+	ServiceName string    `json:"service_name,omitempty"`
+	UnitPath    string    `json:"unit_path,omitempty"`
+	ReportedAt  time.Time `json:"reported_at,omitempty"`
 }
 
 type ManagedAccountConfig struct {

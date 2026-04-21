@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"insylus/internal/pluginhost"
 	"insylus/internal/shared"
@@ -18,6 +19,18 @@ type installData struct {
 	BaseURL string
 	Target  pluginhost.Target
 	Command string
+}
+
+type uninstallData struct {
+	BaseURL        string
+	Target         pluginhost.Target
+	Command        string
+	Exact          bool
+	ServiceName    string
+	BinaryPath     string
+	ConfigPath     string
+	UnitPath       string
+	LastReportedAt *time.Time
 }
 
 type accessSettingsData struct {
@@ -78,4 +91,80 @@ func (a *App) handleInstallPage(w http.ResponseWriter, r *http.Request) {
 		Target:  target,
 		Command: command,
 	})
+}
+
+func (a *App) handleUninstallPage(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	target, err := a.store.targetService().Get(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	record, err := a.store.GetDevice(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	install := normalizedAgentInstall(record.Install)
+	command := "curl -fsSL " + a.baseURL(r) + "/devices/" + id + "/uninstall.sh | sudo bash"
+	var reportedAt *time.Time
+	if !record.Install.ReportedAt.IsZero() {
+		reportedAt = &record.Install.ReportedAt
+	}
+	a.render(w, "uninstall.html", uninstallData{
+		BaseURL:        a.baseURL(r),
+		Target:         target,
+		Command:        command,
+		Exact:          !record.Install.ReportedAt.IsZero(),
+		ServiceName:    install.ServiceName,
+		BinaryPath:     install.BinaryPath,
+		ConfigPath:     install.ConfigPath,
+		UnitPath:       install.UnitPath,
+		LastReportedAt: reportedAt,
+	})
+}
+
+func (a *App) handleUninstallScript(w http.ResponseWriter, r *http.Request) {
+	record, err := a.store.GetDevice(r.Context(), r.PathValue("id"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	install := normalizedAgentInstall(record.Install)
+	script := `#!/usr/bin/env bash
+set -Eeuo pipefail
+
+AGENT_SERVICE="` + install.ServiceName + `"
+AGENT_UNIT="` + install.UnitPath + `"
+AGENT_BIN="` + install.BinaryPath + `"
+AGENT_CONFIG="` + install.ConfigPath + `"
+AGENT_CONFIG_DIR="$(dirname "$AGENT_CONFIG")"
+AGENT_BIN_DIR="$(dirname "$AGENT_BIN")"
+
+sudo systemctl disable --now "$AGENT_SERVICE" 2>/dev/null || true
+sudo rm -f "$AGENT_UNIT"
+sudo systemctl daemon-reload
+sudo systemctl reset-failed "$AGENT_SERVICE" 2>/dev/null || true
+sudo rm -f "$AGENT_BIN"
+sudo rm -f "$AGENT_BIN_DIR"/.insylus-agent.update-*
+sudo rm -rf "$AGENT_CONFIG_DIR"
+`
+	w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
+	_, _ = w.Write([]byte(script))
+}
+
+func normalizedAgentInstall(install AgentInstallState) AgentInstallState {
+	if strings.TrimSpace(install.ServiceName) == "" {
+		install.ServiceName = "insylus-agent.service"
+	}
+	if strings.TrimSpace(install.BinaryPath) == "" {
+		install.BinaryPath = "/usr/local/bin/insylus-agent"
+	}
+	if strings.TrimSpace(install.ConfigPath) == "" {
+		install.ConfigPath = "/etc/insylus-agent/config.json"
+	}
+	if strings.TrimSpace(install.UnitPath) == "" {
+		install.UnitPath = "/etc/systemd/system/" + install.ServiceName
+	}
+	return install
 }

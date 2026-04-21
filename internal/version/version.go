@@ -8,4 +8,4 @@ package version
 //	go build -ldflags "-X insylus/internal/version.ServerVersion=0.1.15"
 var ServerVersion = "dev"
 
-const AgentVersion = "0.1.15"
+const AgentVersion = "0.1.16"

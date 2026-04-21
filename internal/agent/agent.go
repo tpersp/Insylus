@@ -92,7 +92,17 @@ func (r *Runner) Run(ctx context.Context) error {
 
 func (r *Runner) syncOnce(ctx context.Context) error {
 	health := collectHealth()
-	if err := r.doJSON(ctx, http.MethodPost, "/api/checkin", r.cfg.AgentToken, shared.CheckInRequest{Health: health}, nil); err != nil {
+	paths := installPathsFromEnv()
+	if err := r.doJSON(ctx, http.MethodPost, "/api/checkin", r.cfg.AgentToken, shared.CheckInRequest{
+		Health: health,
+		AgentInstall: shared.AgentInstallPaths{
+			BinaryPath:  paths.BinaryPath,
+			ConfigPath:  paths.ConfigPath,
+			ServiceName: paths.ServiceName,
+			UnitPath:    paths.UnitPath,
+			ReportedAt:  time.Now().UTC(),
+		},
+	}, nil); err != nil {
 		return err
 	}
 	var policy shared.AgentPolicyResponse
@@ -107,6 +117,13 @@ func (r *Runner) syncOnce(ctx context.Context) error {
 	report.LastPolicyHealth = health
 	report.DeviceID = policy.DeviceID
 	report.Topology = collectTopologyDiscovery()
+	report.AgentInstall = shared.AgentInstallPaths{
+		BinaryPath:  paths.BinaryPath,
+		ConfigPath:  paths.ConfigPath,
+		ServiceName: paths.ServiceName,
+		UnitPath:    paths.UnitPath,
+		ReportedAt:  time.Now().UTC(),
+	}
 	if err := r.doJSON(ctx, http.MethodPost, "/api/report", r.cfg.AgentToken, report, nil); err != nil {
 		return err
 	}

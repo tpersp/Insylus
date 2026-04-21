@@ -1,0 +1,40 @@
+{{ define "uninstall.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Uninstall Agent</title>
+  {{ template "head-assets" . }}
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page">
+    <div class="page-nav">
+      <a href="/devices/{{ .Target.ID }}" class="button-secondary">← Back to {{ .Target.Name }}</a>
+    </div>
+    <section class="panel">
+      <h2>Uninstall Agent From {{ .Target.Name }}</h2>
+      <p>Run this on the target Linux host as a sudo-capable user.</p>
+      <pre><code>{{ .Command }}</code></pre>
+      {{ if .Exact }}
+      <p class="muted">This uninstall command uses the exact binary, config, service, and unit paths last reported by the agent.</p>
+      {{ else }}
+      <p class="muted">This device has not reported explicit install paths yet, so the uninstall command falls back to the standard Insylus agent defaults.</p>
+      {{ end }}
+    </section>
+    <section class="panel">
+      <h2>Resolved Paths</h2>
+      <div class="facts">
+        <p><span>Service</span><code>{{ .ServiceName }}</code></p>
+        <p><span>Binary</span><code>{{ .BinaryPath }}</code></p>
+        <p><span>Config</span><code>{{ .ConfigPath }}</code></p>
+        <p><span>Unit</span><code>{{ .UnitPath }}</code></p>
+        <p><span>Reported</span>{{ formatOptionalTime .LastReportedAt }}</p>
+      </div>
+      <p class="muted">This removes the local agent service, binary, update temp files, and agent config directory. It does not delete the device record from the Insylus controller.</p>
+    </section>
+  </main>
+</body>
+</html>
+{{ end }}

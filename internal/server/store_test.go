@@ -155,10 +155,10 @@ func TestTopologyInferenceAndOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateDevice child: %v", err)
 	}
-	if err := store.UpdateCheckIn(context.Background(), parent.ID, shared.HealthSnapshot{Hostname: "alpha-pve", IPs: []string{"10.0.0.2"}}); err != nil {
+	if err := store.UpdateCheckIn(context.Background(), parent.ID, shared.HealthSnapshot{Hostname: "alpha-pve", IPs: []string{"10.0.0.2"}}, shared.AgentInstallPaths{}); err != nil {
 		t.Fatalf("UpdateCheckIn parent: %v", err)
 	}
-	if err := store.UpdateCheckIn(context.Background(), child.ID, shared.HealthSnapshot{Hostname: "miscserver", IPs: []string{"10.0.0.5"}}); err != nil {
+	if err := store.UpdateCheckIn(context.Background(), child.ID, shared.HealthSnapshot{Hostname: "miscserver", IPs: []string{"10.0.0.5"}}, shared.AgentInstallPaths{}); err != nil {
 		t.Fatalf("UpdateCheckIn child: %v", err)
 	}
 	if err := store.saveDiscoverySnapshot(context.Background(), parent.ID, shared.TopologyDiscovery{
@@ -274,10 +274,10 @@ func TestTopologyInferenceUniqueProxmoxNameFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateDevice child: %v", err)
 	}
-	if err := store.UpdateCheckIn(context.Background(), parent.ID, shared.HealthSnapshot{Hostname: "alpha-pve", IPs: []string{"10.0.0.2"}}); err != nil {
+	if err := store.UpdateCheckIn(context.Background(), parent.ID, shared.HealthSnapshot{Hostname: "alpha-pve", IPs: []string{"10.0.0.2"}}, shared.AgentInstallPaths{}); err != nil {
 		t.Fatalf("UpdateCheckIn parent: %v", err)
 	}
-	if err := store.UpdateCheckIn(context.Background(), child.ID, shared.HealthSnapshot{Hostname: "miscserver", IPs: []string{"10.0.0.5"}}); err != nil {
+	if err := store.UpdateCheckIn(context.Background(), child.ID, shared.HealthSnapshot{Hostname: "miscserver", IPs: []string{"10.0.0.5"}}, shared.AgentInstallPaths{}); err != nil {
 		t.Fatalf("UpdateCheckIn child: %v", err)
 	}
 	if err := store.saveDiscoverySnapshot(context.Background(), parent.ID, shared.TopologyDiscovery{
@@ -326,7 +326,7 @@ func TestTopologyInferenceNameFallbackRequiresUniqueParent(t *testing.T) {
 		t.Fatalf("CreateDevice child: %v", err)
 	}
 	for _, device := range []shared.Device{alpha, beta, child} {
-		if err := store.UpdateCheckIn(context.Background(), device.ID, shared.HealthSnapshot{Hostname: device.Name, IPs: []string{"10.0.0.5"}}); err != nil {
+		if err := store.UpdateCheckIn(context.Background(), device.ID, shared.HealthSnapshot{Hostname: device.Name, IPs: []string{"10.0.0.5"}}, shared.AgentInstallPaths{}); err != nil {
 			t.Fatalf("UpdateCheckIn %s: %v", device.Name, err)
 		}
 	}

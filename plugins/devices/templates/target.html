@@ -41,6 +41,9 @@
           {{ end }}
         {{ end }}
         <a class="button-link" href="/devices/{{ .Target.ID }}/install">Install agent</a>
+        {{ if .Inventory }}
+        <a class="button-link" href="/devices/{{ .Target.ID }}/uninstall">Uninstall agent</a>
+        {{ end }}
         <form method="post" action="/devices/{{ .Target.ID }}/delete" class="inline-form" onsubmit="return confirm('Delete this target? This cannot be undone.');">
           <button type="submit" class="button-secondary">Delete target</button>
         </form>

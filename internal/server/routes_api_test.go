@@ -472,6 +472,73 @@ func TestAgentPolicyUsesConfiguredManagedUserAndGroups(t *testing.T) {
 	}
 }
 
+func TestUninstallAgentPageUsesReportedInstallPaths(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	device, err := app.store.CreateDevice(httptest.NewRequest(http.MethodGet, "/", nil).Context(), "node-1")
+	if err != nil {
+		t.Fatalf("CreateDevice: %v", err)
+	}
+	var bootstrap shared.BootstrapResponse
+	doJSONRequest(t, app.Handler(), http.MethodPost, "/api/bootstrap/register", "", shared.BootstrapRequest{
+		BootstrapToken: device.BootstrapToken,
+		Hostname:       "node-1",
+		OSName:         "Linux",
+		AgentVersion:   "test",
+	}, &bootstrap)
+
+	doJSONRequest(t, app.Handler(), http.MethodPost, "/api/checkin", bootstrap.AgentToken, shared.CheckInRequest{
+		Health: shared.HealthSnapshot{
+			Hostname:     "node-1",
+			OSName:       "Linux",
+			AgentVersion: "test",
+			IPs:          []string{"10.0.0.10"},
+		},
+		AgentInstall: shared.AgentInstallPaths{
+			BinaryPath:  "/custom/bin/agent",
+			ConfigPath:  "/custom/etc/config.json",
+			ServiceName: "custom-agent.service",
+			UnitPath:    "/custom/systemd/custom-agent.service",
+		},
+	}, nil)
+	doJSONRequest(t, app.Handler(), http.MethodPost, "/api/report", bootstrap.AgentToken, shared.DeviceReport{
+		DeviceID: device.ID,
+		AgentInstall: shared.AgentInstallPaths{
+			BinaryPath:  "/custom/bin/agent",
+			ConfigPath:  "/custom/etc/config.json",
+			ServiceName: "custom-agent.service",
+			UnitPath:    "/custom/systemd/custom-agent.service",
+		},
+	}, nil)
+
+	record, err := app.store.GetDevice(context.Background(), device.ID)
+	if err != nil {
+		t.Fatalf("GetDevice after checkin: %v", err)
+	}
+	if record.Install.BinaryPath != "/custom/bin/agent" || record.Install.ServiceName != "custom-agent.service" {
+		t.Fatalf("install state not saved: %+v", record.Install)
+	}
+
+	page := httptest.NewRecorder()
+	app.Handler().ServeHTTP(page, httptest.NewRequest(http.MethodGet, "/devices/"+device.ID+"/uninstall", nil))
+	if page.Code != http.StatusOK {
+		t.Fatalf("GET uninstall page status = %d, body %q", page.Code, page.Body.String())
+	}
+	if !bytes.Contains(page.Body.Bytes(), []byte("/custom/bin/agent")) || !bytes.Contains(page.Body.Bytes(), []byte("custom-agent.service")) {
+		t.Fatalf("uninstall page did not render reported paths: %s", page.Body.String())
+	}
+
+	script := httptest.NewRecorder()
+	app.Handler().ServeHTTP(script, httptest.NewRequest(http.MethodGet, "/devices/"+device.ID+"/uninstall.sh", nil))
+	if script.Code != http.StatusOK {
+		t.Fatalf("GET uninstall script status = %d, body %q", script.Code, script.Body.String())
+	}
+	if !bytes.Contains(script.Body.Bytes(), []byte(`AGENT_BIN="/custom/bin/agent"`)) || !bytes.Contains(script.Body.Bytes(), []byte(`AGENT_SERVICE="custom-agent.service"`)) {
+		t.Fatalf("uninstall script did not use reported paths: %s", script.Body.String())
+	}
+}
+
 func TestAgentPolicyUsesPersistedManagedAccountSettings(t *testing.T) {
 	app := newTestAppWithConfig(t, Config{
 		DBPath:        filepath.Join(t.TempDir(), "insylus.db"),

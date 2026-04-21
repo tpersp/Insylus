@@ -36,6 +36,8 @@ func (a *App) registerCoreRoutes() {
 		routeDef{PluginID: "access", Pattern: "POST /settings/managed-account", Handler: a.handleAccessSettingsManagedAccount},
 		routeDef{Pattern: "GET /plugins", Handler: a.handlePluginPage},
 		routeDef{Pattern: "GET /devices/{id}/install", Handler: a.handleInstallPage},
+		routeDef{Pattern: "GET /devices/{id}/uninstall", Handler: a.handleUninstallPage},
+		routeDef{Pattern: "GET /devices/{id}/uninstall.sh", Handler: a.handleUninstallScript},
 	)
 }
 

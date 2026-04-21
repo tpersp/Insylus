@@ -38,6 +38,7 @@ type DeviceRecord struct {
 	Discovery DeviceDiscoverySnapshot
 	Resolved  ResolvedTopology
 	Update    AgentUpdateState
+	Install   AgentInstallState
 }
 
 type DeviceMetadata struct {
@@ -91,6 +92,16 @@ type AgentUpdateState struct {
 	LastAttemptedAt    time.Time
 	ReportedGOOS       string
 	ReportedGOARCH     string
+}
+
+type AgentInstallState struct {
+	DeviceID    string
+	BinaryPath  string
+	ConfigPath  string
+	ServiceName string
+	UnitPath    string
+	ReportedAt  time.Time
+	UpdatedAt   time.Time
 }
 
 type ManualTopologyNode struct {
@@ -391,6 +402,15 @@ func (s *Store) migrate(ctx context.Context) error {
 			reported_goarch text not null default '',
 			updated_at text not null
 		);`,
+		`create table if not exists device_agent_installs (
+			device_id text primary key references devices(id) on delete cascade,
+			binary_path text not null default '',
+			config_path text not null default '',
+			service_name text not null default '',
+			unit_path text not null default '',
+			reported_at text,
+			updated_at text not null
+		);`,
 		`create table if not exists topology_nodes (
 			id integer primary key autoincrement,
 			name text not null,
@@ -632,6 +652,11 @@ func (s *Store) CreateDevice(ctx context.Context, name string) (shared.Device, e
 		values (?, ?)`, device.ID, now.Format(time.RFC3339)); err != nil {
 		return shared.Device{}, err
 	}
+	if _, err := tx.ExecContext(ctx, `
+		insert into device_agent_installs (device_id, updated_at)
+		values (?, ?)`, device.ID, now.Format(time.RFC3339)); err != nil {
+		return shared.Device{}, err
+	}
 	emptyJSON := "[]"
 	if _, err := tx.ExecContext(ctx, `
 		insert into targets (id, name, kind, hostname, ips_json, tags_json, note, created_by, created_at, updated_at)
@@ -656,7 +681,8 @@ func (s *Store) ListDevices(ctx context.Context) ([]DeviceRecord, error) {
 			coalesce(m.note, ''), m.type_override, m.purpose_override, m.parent_override_device_id, coalesce(m.parent_override_state, 'inherit'), m.updated_at,
 			coalesce(ds.device_type, 'unknown'), coalesce(ds.purpose, 'unknown'), coalesce(ds.platform_class, 'unknown'), coalesce(ds.wol_json, '{}'), coalesce(ds.workloads_json, '[]'), coalesce(ds.child_candidates_json, '[]'), coalesce(ds.warnings_json, '[]'), ds.updated_at,
 			coalesce(rc.parent_device_id, ''), coalesce(parent.name, ''), coalesce(op.name, ''), coalesce(rc.confidence, ''), coalesce(rc.reason, ''), rc.updated_at,
-			coalesce(au.auto_update_override, 'inherit'), coalesce(au.effective_enabled, 0), coalesce(au.update_available, 0), coalesce(au.server_agent_version, ''), coalesce(au.status, 'idle'), coalesce(au.error, ''), au.last_checked_at, au.last_attempted_at, coalesce(au.reported_goos, ''), coalesce(au.reported_goarch, '')
+			coalesce(au.auto_update_override, 'inherit'), coalesce(au.effective_enabled, 0), coalesce(au.update_available, 0), coalesce(au.server_agent_version, ''), coalesce(au.status, 'idle'), coalesce(au.error, ''), au.last_checked_at, au.last_attempted_at, coalesce(au.reported_goos, ''), coalesce(au.reported_goarch, ''),
+			coalesce(ai.binary_path, ''), coalesce(ai.config_path, ''), coalesce(ai.service_name, ''), coalesce(ai.unit_path, ''), ai.reported_at, ai.updated_at
 		from devices d
 		left join device_access_policies p on p.device_id = d.id
 		left join ssh_keys k on k.id = p.ssh_key_id
@@ -665,6 +691,7 @@ func (s *Store) ListDevices(ctx context.Context) ([]DeviceRecord, error) {
 		left join device_discovery_snapshots ds on ds.device_id = d.id
 		left join relationship_candidates rc on rc.child_device_id = d.id
 		left join device_agent_updates au on au.device_id = d.id
+		left join device_agent_installs ai on ai.device_id = d.id
 		left join devices parent on parent.id = rc.parent_device_id
 		left join devices op on op.id = m.parent_override_device_id
 		order by d.name asc`)
@@ -693,7 +720,8 @@ func (s *Store) GetDevice(ctx context.Context, id string) (DeviceRecord, error) 
 			coalesce(m.note, ''), m.type_override, m.purpose_override, m.parent_override_device_id, coalesce(m.parent_override_state, 'inherit'), m.updated_at,
 			coalesce(ds.device_type, 'unknown'), coalesce(ds.purpose, 'unknown'), coalesce(ds.platform_class, 'unknown'), coalesce(ds.wol_json, '{}'), coalesce(ds.workloads_json, '[]'), coalesce(ds.child_candidates_json, '[]'), coalesce(ds.warnings_json, '[]'), ds.updated_at,
 			coalesce(rc.parent_device_id, ''), coalesce(parent.name, ''), coalesce(op.name, ''), coalesce(rc.confidence, ''), coalesce(rc.reason, ''), rc.updated_at,
-			coalesce(au.auto_update_override, 'inherit'), coalesce(au.effective_enabled, 0), coalesce(au.update_available, 0), coalesce(au.server_agent_version, ''), coalesce(au.status, 'idle'), coalesce(au.error, ''), au.last_checked_at, au.last_attempted_at, coalesce(au.reported_goos, ''), coalesce(au.reported_goarch, '')
+			coalesce(au.auto_update_override, 'inherit'), coalesce(au.effective_enabled, 0), coalesce(au.update_available, 0), coalesce(au.server_agent_version, ''), coalesce(au.status, 'idle'), coalesce(au.error, ''), au.last_checked_at, au.last_attempted_at, coalesce(au.reported_goos, ''), coalesce(au.reported_goarch, ''),
+			coalesce(ai.binary_path, ''), coalesce(ai.config_path, ''), coalesce(ai.service_name, ''), coalesce(ai.unit_path, ''), ai.reported_at, ai.updated_at
 		from devices d
 		left join device_access_policies p on p.device_id = d.id
 		left join ssh_keys k on k.id = p.ssh_key_id
@@ -702,6 +730,7 @@ func (s *Store) GetDevice(ctx context.Context, id string) (DeviceRecord, error) 
 		left join device_discovery_snapshots ds on ds.device_id = d.id
 		left join relationship_candidates rc on rc.child_device_id = d.id
 		left join device_agent_updates au on au.device_id = d.id
+		left join device_agent_installs ai on ai.device_id = d.id
 		left join devices parent on parent.id = rc.parent_device_id
 		left join devices op on op.id = m.parent_override_device_id
 		where d.id = ?`, id)
@@ -1307,7 +1336,7 @@ func (s *Store) AuthenticateAgent(ctx context.Context, token string) (shared.Dev
 	return device, nil
 }
 
-func (s *Store) UpdateCheckIn(ctx context.Context, deviceID string, health shared.HealthSnapshot) error {
+func (s *Store) UpdateCheckIn(ctx context.Context, deviceID string, health shared.HealthSnapshot, install shared.AgentInstallPaths) error {
 	now := time.Now().UTC()
 	ipsJSON, _ := json.Marshal(health.IPs)
 	_, err := s.db.ExecContext(ctx, `
@@ -1324,6 +1353,9 @@ func (s *Store) UpdateCheckIn(ctx context.Context, deviceID string, health share
 		where device_id = ?`, health.AgentGOOS, health.AgentGOARCH, now.Format(time.RFC3339), deviceID); err != nil {
 		return err
 	}
+	if err := s.saveAgentInstallPaths(ctx, deviceID, install, now); err != nil {
+		return err
+	}
 	if _, err := s.db.ExecContext(ctx, `
 		update targets
 		set hostname = ?, ips_json = ?, updated_at = ?
@@ -1332,6 +1364,32 @@ func (s *Store) UpdateCheckIn(ctx context.Context, deviceID string, health share
 		return err
 	}
 	return s.resolveTopology(ctx)
+}
+
+func (s *Store) saveAgentInstallPaths(ctx context.Context, deviceID string, install shared.AgentInstallPaths, now time.Time) error {
+	reportedAt := install.ReportedAt
+	if reportedAt.IsZero() {
+		reportedAt = now
+	}
+	_, err := s.db.ExecContext(ctx, `
+		insert into device_agent_installs (device_id, binary_path, config_path, service_name, unit_path, reported_at, updated_at)
+		values (?, ?, ?, ?, ?, ?, ?)
+		on conflict(device_id) do update set
+			binary_path = excluded.binary_path,
+			config_path = excluded.config_path,
+			service_name = excluded.service_name,
+			unit_path = excluded.unit_path,
+			reported_at = excluded.reported_at,
+			updated_at = excluded.updated_at`,
+		deviceID,
+		strings.TrimSpace(install.BinaryPath),
+		strings.TrimSpace(install.ConfigPath),
+		strings.TrimSpace(install.ServiceName),
+		strings.TrimSpace(install.UnitPath),
+		reportedAt.UTC().Format(time.RFC3339),
+		now.UTC().Format(time.RFC3339),
+	)
+	return err
 }
 
 func (s *Store) GetPolicyForDevice(ctx context.Context, deviceID string) (shared.AgentPolicyResponse, error) {
@@ -1368,6 +1426,9 @@ func (s *Store) SaveReport(ctx context.Context, token string, report shared.Devi
 		report.AppliedRevision, boolInt(report.UserPresent), boolInt(report.SudoEnabled), boolInt(report.AuditEnabled),
 		string(fingerprintsJSON), boolInt(report.EnforcementSucceeded), report.ErrorMessage, string(healthJSON), now, device.ID)
 	if err != nil {
+		return err
+	}
+	if err := s.saveAgentInstallPaths(ctx, device.ID, report.AgentInstall, time.Now().UTC()); err != nil {
 		return err
 	}
 	if err := s.saveDiscoverySnapshot(ctx, device.ID, report.Topology); err != nil {
@@ -1907,6 +1968,12 @@ func scanDeviceRecord(row scanner) (DeviceRecord, error) {
 		updateLastAttempted                           sql.NullString
 		updateGOOS                                    sql.NullString
 		updateGOARCH                                  sql.NullString
+		installBinaryPath                             sql.NullString
+		installConfigPath                             sql.NullString
+		installServiceName                            sql.NullString
+		installUnitPath                               sql.NullString
+		installReportedAt                             sql.NullString
+		installUpdatedAt                              sql.NullString
 	)
 	if err := row.Scan(
 		&record.Device.ID, &record.Device.Name, &record.Device.BootstrapToken, &record.Device.AgentToken,
@@ -1919,6 +1986,7 @@ func scanDeviceRecord(row scanner) (DeviceRecord, error) {
 		&discoveryDeviceType, &discoveryPurpose, &discoveryPlatform, &discoveryWOLJSON, &discoveryWorkloadsJSON, &discoveryChildrenJSON, &discoveryWarningsJSON, &discoveryUpdated,
 		&relationshipParentID, &relationshipParentName, &overrideParentName, &relationshipConfidence, &relationshipReason, &relationshipUpdated,
 		&updateOverride, &updateEffective, &updateAvailable, &updateServerVersion, &updateStatus, &updateError, &updateLastChecked, &updateLastAttempted, &updateGOOS, &updateGOARCH,
+		&installBinaryPath, &installConfigPath, &installServiceName, &installUnitPath, &installReportedAt, &installUpdatedAt,
 	); err != nil {
 		return DeviceRecord{}, err
 	}
@@ -2087,6 +2155,17 @@ func scanDeviceRecord(row scanner) (DeviceRecord, error) {
 	}
 	record.Update.ReportedGOOS = updateGOOS.String
 	record.Update.ReportedGOARCH = updateGOARCH.String
+	record.Install.DeviceID = record.Device.ID
+	record.Install.BinaryPath = installBinaryPath.String
+	record.Install.ConfigPath = installConfigPath.String
+	record.Install.ServiceName = installServiceName.String
+	record.Install.UnitPath = installUnitPath.String
+	if installReportedAt.Valid {
+		record.Install.ReportedAt, _ = time.Parse(time.RFC3339, installReportedAt.String)
+	}
+	if installUpdatedAt.Valid {
+		record.Install.UpdatedAt, _ = time.Parse(time.RFC3339, installUpdatedAt.String)
+	}
 	return record, nil
 }
 
