@@ -52,7 +52,7 @@ func (a *App) handlePluginEnable(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, map[string]string{"status": "enabled", "restart": "required"})
+	a.writeJSON(w, http.StatusOK, map[string]string{"status": "enabled", "restart": "not_required"})
 }
 
 func (a *App) handlePluginDisable(w http.ResponseWriter, r *http.Request) {
@@ -76,7 +76,7 @@ func (a *App) handlePluginProfileApply(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, map[string]string{"status": "applied", "restart": "required"})
+	a.writeJSON(w, http.StatusOK, map[string]string{"status": "applied", "restart": "not_required"})
 }
 
 func (a *App) handleRestart(w http.ResponseWriter, r *http.Request) {

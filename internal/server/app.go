@@ -68,9 +68,6 @@ func New(cfg Config, logger *log.Logger) (*App, error) {
 	app.registerCoreRoutes()
 	host := newServerPluginHost(app)
 	for _, plugin := range plugins {
-		if !app.plugins.Enabled(plugin.ID()) {
-			continue
-		}
 		if err := plugin.Register(host.ForPlugin(plugin.ID())); err != nil {
 			return nil, err
 		}

@@ -20,7 +20,7 @@ On the controller host, it provides:
 - `/api/targets` for neutral target lookup
 - optional plugin surfaces such as Devices, Discovery, Agent, Access, Docker, Proxmox, Jellyfin, Services, Topology, and Wake
 
-Disabling a plugin gates its already-registered web routes, API routes, and plugin static assets immediately; they return `404` without waiting for a restart. Enabling a plugin that was disabled at startup requires restarting `insylus.service` before its routes and assets are available.
+Disabling a plugin gates its web routes, API routes, navigation items, and plugin static assets immediately; they return `404` or disappear from navigation without waiting for a restart. Enabling a compiled plugin also makes its surfaces available immediately.
 
 When the Agent plugin is enabled, enrolled devices report inventory data:
 

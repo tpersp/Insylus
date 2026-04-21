@@ -122,6 +122,34 @@ func TestDisabledAtStartupRoutesDoNotFallThroughToDashboard(t *testing.T) {
 	}
 }
 
+func TestPluginEnableActivatesRoutesWithoutRestart(t *testing.T) {
+	app := newTestAppWithOnlyPlugins(t, Config{
+		DBPath: filepath.Join(t.TempDir(), "insylus.db"),
+	}, "dashboard", "help")
+	defer app.Close()
+	handler := app.Handler()
+
+	if status := responseStatus(handler, http.MethodGet, "/discovery", nil); status != http.StatusNotFound {
+		t.Fatalf("GET /discovery before enable status = %d, want 404", status)
+	}
+	if status := responseStatus(handler, http.MethodGet, "/api/discovery", nil); status != http.StatusNotFound {
+		t.Fatalf("GET /api/discovery before enable status = %d, want 404", status)
+	}
+
+	var enableResp map[string]string
+	doJSONRequest(t, handler, http.MethodPost, "/api/plugins/discovery/enable", "", nil, &enableResp)
+	if enableResp["restart"] != "not_required" {
+		t.Fatalf("enable response restart = %q, want not_required", enableResp["restart"])
+	}
+
+	if status := responseStatus(handler, http.MethodGet, "/discovery", nil); status != http.StatusOK {
+		t.Fatalf("GET /discovery after enable status = %d, want 200", status)
+	}
+	if status := responseStatus(handler, http.MethodGet, "/api/discovery", nil); status != http.StatusOK {
+		t.Fatalf("GET /api/discovery after enable status = %d, want 200", status)
+	}
+}
+
 func TestWebLandingAndDevicesRoutes(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()

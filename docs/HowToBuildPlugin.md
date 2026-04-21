@@ -8,7 +8,7 @@ Insylus plugins are in-process Go source plugins with runtime enablement. They a
 func New() pluginhost.Plugin
 ```
 
-After adding or removing a plugin folder, regenerate the registry and rebuild the app. The rebuilt app knows the plugin exists, but the server only registers routes, navigation, templates, migrations, and API behavior for plugins enabled in runtime plugin settings at startup.
+After adding or removing a plugin folder, regenerate the registry and rebuild the app. The rebuilt app knows the plugin exists, and the server registers compiled plugin surfaces at startup so runtime enablement can expose them immediately.
 
 Runtime plugin management:
 
@@ -20,7 +20,7 @@ insylusctl plugins profiles
 insylusctl plugins apply-profile homelab
 ```
 
-Disabling a plugin takes effect immediately for already-registered web routes, API routes, and plugin static assets: those surfaces return `404` without a restart. Enabling a plugin that was disabled at startup still requires a service restart before its routes and assets exist in the running server.
+Disabling a plugin takes effect immediately for already-registered web routes, API routes, navigation items, and plugin static assets: those surfaces return `404` or disappear from navigation without a restart. Enabling a compiled plugin also takes effect immediately without a restart.
 
 Core target APIs are always available at `/api/targets`. Feature plugins should attach to neutral targets rather than requiring the Devices plugin to be enabled.
 
@@ -216,7 +216,7 @@ After generation, both server and CLI load:
 registry.Plugins()
 ```
 
-Removing a plugin from the registry removes that plugin from the rebuilt app. Runtime enablement controls whether a compiled plugin contributes server routes, navigation, templates, static assets, migrations, and API behavior at startup.
+Removing a plugin from the registry removes that plugin from the rebuilt app. Runtime enablement controls whether a compiled plugin is visible and reachable at runtime.
 
 ## CLI Plugins
 
