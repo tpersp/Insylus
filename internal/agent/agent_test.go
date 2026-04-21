@@ -82,13 +82,45 @@ func TestShouldIgnoreService(t *testing.T) {
 		})
 	}
 
-	kept := []string{"docker", "insylus-agent", "qemu-guest-agent", "pulse-agent"}
+	kept := []string{"docker", "echomosaic", "insylus-agent", "qemu-guest-agent", "pulse-agent"}
 	for _, service := range kept {
 		t.Run("keep "+service, func(t *testing.T) {
 			if shouldIgnoreService(service) {
 				t.Fatalf("expected %q to be kept", service)
 			}
 		})
+	}
+}
+
+func TestIsLocalSystemService(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("INSYLUS_AGENT_SYSTEMD_LOCAL_UNIT_DIRS", dir)
+	path := filepath.Join(dir, "echomosaic.service")
+	if err := os.WriteFile(path, []byte("[Unit]\nDescription=Echo Mosaic\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if !isLocalSystemService("echomosaic") {
+		t.Fatal("expected echomosaic to be detected as a local system service")
+	}
+	if isLocalSystemService("ssh") {
+		t.Fatal("expected ssh to be absent from local system service dirs")
+	}
+}
+
+func TestServiceDiscoveryPriority(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("INSYLUS_AGENT_SYSTEMD_LOCAL_UNIT_DIRS", dir)
+	if err := os.WriteFile(filepath.Join(dir, "echomosaic.service"), []byte("[Unit]\nDescription=Echo Mosaic\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if got, want := serviceDiscoveryPriority("echomosaic"), 3; got != want {
+		t.Fatalf("serviceDiscoveryPriority(echomosaic) = %d, want %d", got, want)
+	}
+	if got, want := serviceDiscoveryPriority("docker"), 2; got != want {
+		t.Fatalf("serviceDiscoveryPriority(docker) = %d, want %d", got, want)
+	}
+	if got, want := serviceDiscoveryPriority("custom-unmanaged"), 1; got != want {
+		t.Fatalf("serviceDiscoveryPriority(custom-unmanaged) = %d, want %d", got, want)
 	}
 }
 

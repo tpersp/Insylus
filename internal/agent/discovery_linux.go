@@ -219,9 +219,17 @@ func discoverSystemdServices(warnings *[]string) []shared.Workload {
 			continue
 		}
 		workloads = append(workloads, shared.Workload{Name: trimmed, Kind: shared.WorkloadKindService, State: "running"})
-		if len(workloads) >= 12 {
-			break
+	}
+	sort.SliceStable(workloads, func(i, j int) bool {
+		pi := serviceDiscoveryPriority(workloads[i].Name)
+		pj := serviceDiscoveryPriority(workloads[j].Name)
+		if pi != pj {
+			return pi > pj
 		}
+		return workloads[i].Name < workloads[j].Name
+	})
+	if len(workloads) > 24 {
+		workloads = workloads[:24]
 	}
 	return workloads
 }
@@ -726,6 +734,63 @@ func shouldIgnoreUserService(name string) bool {
 		}
 	}
 	return false
+}
+
+func serviceDiscoveryPriority(name string) int {
+	switch {
+	case isLocalSystemService(name):
+		return 3
+	case isExplicitlyRelevantService(name):
+		return 2
+	default:
+		return 1
+	}
+}
+
+func isLocalSystemService(name string) bool {
+	if name == "" {
+		return false
+	}
+	unitName := name
+	if !strings.HasSuffix(unitName, ".service") {
+		unitName += ".service"
+	}
+	for _, dir := range systemdLocalUnitDirs() {
+		if dir == "" {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(dir, unitName)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func systemdLocalUnitDirs() []string {
+	if raw := strings.TrimSpace(os.Getenv("INSYLUS_AGENT_SYSTEMD_LOCAL_UNIT_DIRS")); raw != "" {
+		parts := strings.Split(raw, string(os.PathListSeparator))
+		out := make([]string, 0, len(parts))
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				out = append(out, part)
+			}
+		}
+		return out
+	}
+	return []string{
+		"/etc/systemd/system",
+		"/usr/local/lib/systemd/system",
+	}
+}
+
+func isExplicitlyRelevantService(name string) bool {
+	switch strings.TrimSpace(name) {
+	case "code-server", "docker", "echomosaic", "insylus-agent", "jellyfin", "pulse-agent", "qemu-guest-agent":
+		return true
+	default:
+		return false
+	}
 }
 
 func exists(path string) bool {
