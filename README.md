@@ -105,19 +105,28 @@ After installation, the remote managed user and audit groups can be changed from
 
 ## Server updates
 
-The Server Update plugin checks the latest GitHub release for the controller/server version. Source-built installs show `dev` unless the server binary was built with `ServerVersion` stamped as shown above.
+The Server Update plugin checks the latest GitHub release for the controller version. Source-built installs show `dev` unless the server binary was built with `ServerVersion` stamped as shown above.
 
-For an in-app server update to apply successfully, the GitHub release must include these assets:
+In-app updates are controller-wide, not server-only. A valid release must include a full controller update bundle for the controller platform. The bundle is applied atomically enough to keep these binaries aligned:
 
 - `insylus-server`
-- `insylus-server-<tag>.sha256`
+- `insylusctl`
+- `insylus-agent`
+- `insylus-agent-linux-amd64`
+- `insylus-agent-linux-arm64`
+- `insylus-agent-linux-armv7`
+
+For a Linux `amd64` controller, the GitHub release must include:
+
+- `insylus-update-linux-amd64.tar.gz`
+- `insylus-update-linux-amd64.tar.gz-<tag>.sha256`
 
 For example, release tag `v2026.04.19` should include:
 
-- `insylus-server`
-- `insylus-server-v2026.04.19.sha256`
+- `insylus-update-linux-amd64.tar.gz`
+- `insylus-update-linux-amd64.tar.gz-v2026.04.19.sha256`
 
-If release assets are not present, the update page can detect the latest release but cannot install it automatically.
+If the full bundle assets are not present, the update page can detect the latest release but will refuse to apply a partial update.
 
 To remove the service:
 

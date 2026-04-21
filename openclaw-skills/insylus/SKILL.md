@@ -110,7 +110,7 @@ Suggested role for read-only: `PVEAuditor`. Power actions need `VM.PowerMgmt`.
 - `/jellyfin` — Jellyfin token management
 - `/docker` — Docker host configuration and container control
 - `/topology` — topology map (web only, not CLI/API)
-- `/update` — server update management
+- `/update` — controller update management
 
 ## Troubleshooting
 
@@ -591,11 +591,11 @@ The Topology plugin provides a visual map of the homelab network.
 
 ## Update plugin
 
-The Update plugin manages Insylus server updates.
+The Update plugin manages Insylus controller updates.
 
 ### Web UI
 
-- `/update` — server update management interface
+- `/update` — controller update management interface
 
 ### API endpoints
 

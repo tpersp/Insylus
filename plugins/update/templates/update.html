@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Server Update</title>
+  <title>Controller Update</title>
   {{ template "head-assets" . }}
 </head>
 <body>
@@ -15,14 +15,14 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow">System</p>
-            <h2>Server Update</h2>
+            <h2>Controller Update</h2>
           </div>
         </div>
-        <p>Update the Insylus server to the latest version. Your data and settings will be preserved.</p>
+        <p>Update the Insylus controller binaries to the latest version. Your data and settings will be preserved.</p>
 
         <div class="version-display">
           <div class="version-info">
-            <span class="version-label">Current Server Version</span>
+            <span class="version-label">Current Controller Version</span>
             <span class="version-number">{{ .CurrentVersion }}</span>
           </div>
           <div class="version-info">
@@ -62,7 +62,7 @@
           <span class="toggle-slider"></span>
         </label>
       </div>
-      <p>When enabled, the server will automatically download and install updates. The service will restart during the update process.</p>
+      <p>When enabled, Insylus will download and install the full controller update bundle. The service will restart during the update process.</p>
     </section>
 
     <section class="panel">

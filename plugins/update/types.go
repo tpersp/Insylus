@@ -18,6 +18,13 @@ type ReleaseAsset struct {
 	BrowserDownloadURL string `json:"browser_download_url"`
 }
 
+type ReleasePackage struct {
+	AssetName   string
+	DownloadURL string
+	ChecksumURL string
+	PackageKind string
+}
+
 // UpdateInfo is the response for update status.
 type UpdateInfo struct {
 	CurrentVersion  string    `json:"current_version"`

@@ -851,7 +851,7 @@ Current top-level plugins:
 - `plugins/proxmox`: Proxmox CLI, `/api/proxmox*`, `/proxmox` token setup page, and user-provided token storage.
 - `plugins/services`: services CLI, `/api/services*`, services and history web pages.
 - `plugins/topology`: web-only topology page, topology edit routes, `/topology/graph`, and topology assets.
-- `plugins/update`: web/API server update workflow at `/update` and `/api/update*`.
+- `plugins/update`: web/API controller update workflow at `/update` and `/api/update*`.
 - `plugins/wake`: wake CLI plus web/API wake actions.
 
 The Proxmox plugin is intentionally based on user-created API tokens. Do not add token auto-provisioning unless a future plan explicitly changes that product decision.

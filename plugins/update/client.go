@@ -1,6 +1,9 @@
 package update
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -10,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	stdruntime "runtime"
 	"strings"
 	"time"
@@ -20,13 +24,12 @@ const (
 	DefaultGitHubRepo   = "Insylus"
 	DefaultGitHubAPIURL = "https://api.github.com"
 	InsylusBinaryName   = "insylus-server"
-	DefaultBinaryPath   = "/opt/insylus/bin/insylus-server"
 	DefaultHelperPath   = "/opt/insylus/bin/insylus-apply-server-update"
 	DefaultStagingDir   = "/var/lib/insylus/server-updates"
 )
 
 var ErrNoLatestRelease = errors.New("no published GitHub release found")
-var ErrMissingReleaseAssets = errors.New("server update package is not available")
+var ErrMissingReleaseAssets = errors.New("controller update package is not available")
 
 // GitHubClient interacts with the GitHub API.
 type GitHubClient struct {
@@ -90,45 +93,35 @@ func (c *GitHubClient) fetchRelease(ctx context.Context, apiURL string) (*GitHub
 	return &release, nil
 }
 
-// ReleaseAssetURLs returns the server binary and checksum URLs from release assets.
-func ReleaseAssetURLs(release *GitHubRelease) (string, string, error) {
+// ReleasePackageAssets returns the controller update bundle from release assets.
+func ReleasePackageAssets(release *GitHubRelease) (ReleasePackage, error) {
 	if release == nil {
-		return "", "", ErrMissingReleaseAssets
+		return ReleasePackage{}, ErrMissingReleaseAssets
 	}
-	assetNames := serverAssetNameCandidates(stdruntime.GOOS, stdruntime.GOARCH)
-	var binaryURL string
-	var checksumURL string
-	for _, assetName := range assetNames {
+	for _, assetName := range updateBundleAssetNameCandidates(stdruntime.GOOS, stdruntime.GOARCH) {
 		checksumName := fmt.Sprintf("%s-%s.sha256", assetName, release.TagName)
-		binaryURL = ""
-		checksumURL = ""
+		pkg := ReleasePackage{AssetName: assetName, PackageKind: "bundle"}
 		for _, asset := range release.Assets {
 			switch asset.Name {
 			case assetName:
-				binaryURL = strings.TrimSpace(asset.BrowserDownloadURL)
+				pkg.DownloadURL = strings.TrimSpace(asset.BrowserDownloadURL)
 			case checksumName:
-				checksumURL = strings.TrimSpace(asset.BrowserDownloadURL)
+				pkg.ChecksumURL = strings.TrimSpace(asset.BrowserDownloadURL)
 			}
 		}
-		if binaryURL != "" && checksumURL != "" {
-			return binaryURL, checksumURL, nil
+		if pkg.DownloadURL != "" && pkg.ChecksumURL != "" {
+			return pkg, nil
 		}
 	}
-	return "", "", ErrMissingReleaseAssets
+	return ReleasePackage{}, ErrMissingReleaseAssets
 }
 
-func serverAssetNameCandidates(goos, goarch string) []string {
-	names := []string{fmt.Sprintf("%s-%s-%s", InsylusBinaryName, goos, goarch)}
+func updateBundleAssetNameCandidates(goos, goarch string) []string {
+	names := []string{fmt.Sprintf("insylus-update-%s-%s.tar.gz", goos, goarch)}
 	if goos == "linux" && goarch == "arm" {
-		names = append([]string{InsylusBinaryName + "-linux-armv7"}, names...)
+		names = append([]string{"insylus-update-linux-armv7.tar.gz"}, names...)
 	}
-	return append(names, InsylusBinaryName)
-}
-
-func serverAssetName(tagName string, goos, goarch string) (binary, checksum string) {
-	binary = fmt.Sprintf("%s-%s-%s", InsylusBinaryName, goos, goarch)
-	checksum = fmt.Sprintf("%s-%s-%s-v%s.sha256", InsylusBinaryName, goos, goarch, strings.TrimPrefix(tagName, "v"))
-	return binary, checksum
+	return names
 }
 
 // DownloadFile downloads a file and returns its content.
@@ -195,4 +188,64 @@ func envDefault(key, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func extractTarGz(data []byte, dstDir string) error {
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+		return err
+	}
+	gr, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	defer gr.Close()
+	tr := tar.NewReader(gr)
+	for {
+		hdr, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		name := strings.TrimSpace(hdr.Name)
+		if name == "" {
+			continue
+		}
+		cleanName := filepath.Clean(name)
+		if cleanName == "." || cleanName == ".." || strings.HasPrefix(cleanName, "../") || filepath.IsAbs(cleanName) {
+			return fmt.Errorf("invalid bundle entry %q", name)
+		}
+		targetPath := filepath.Join(dstDir, cleanName)
+		if !strings.HasPrefix(targetPath, dstDir+string(os.PathSeparator)) && targetPath != dstDir {
+			return fmt.Errorf("bundle entry escapes staging dir: %q", name)
+		}
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(targetPath, 0o755); err != nil {
+				return err
+			}
+		case tar.TypeReg, tar.TypeRegA:
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+				return err
+			}
+			mode := os.FileMode(0o644)
+			if hdr.FileInfo().Mode().Perm() != 0 {
+				mode = hdr.FileInfo().Mode().Perm()
+			}
+			f, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(f, tr); err != nil {
+				_ = f.Close()
+				return err
+			}
+			if err := f.Close(); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("unsupported bundle entry %q", name)
+		}
+	}
 }

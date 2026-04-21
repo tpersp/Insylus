@@ -1,10 +1,15 @@
 package update
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -56,58 +61,89 @@ func TestFetchReleaseByTagUsesConfiguredRepo(t *testing.T) {
 	}
 }
 
-func TestReleaseAssetURLsUsesReleaseAssets(t *testing.T) {
-	binaryURL, checksumURL, err := ReleaseAssetURLs(&GitHubRelease{
+func TestReleasePackageAssetsUsesBundleAssets(t *testing.T) {
+	pkg, err := ReleasePackageAssets(&GitHubRelease{
 		TagName: "v1.2.3",
 		Assets: []ReleaseAsset{
 			{Name: "notes.txt", BrowserDownloadURL: "https://example.invalid/notes.txt"},
-			{Name: "insylus-server-v1.2.3.sha256", BrowserDownloadURL: "https://example.invalid/insylus-server-v1.2.3.sha256"},
-			{Name: "insylus-server", BrowserDownloadURL: "https://example.invalid/insylus-server"},
+			{Name: "insylus-update-linux-amd64.tar.gz-v1.2.3.sha256", BrowserDownloadURL: "https://example.invalid/insylus-update-linux-amd64.tar.gz-v1.2.3.sha256"},
+			{Name: "insylus-update-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.invalid/insylus-update-linux-amd64.tar.gz"},
 		},
 	})
 	if err != nil {
-		t.Fatalf("ReleaseAssetURLs: %v", err)
+		t.Fatalf("ReleasePackageAssets: %v", err)
 	}
-	if binaryURL != "https://example.invalid/insylus-server" {
-		t.Fatalf("binaryURL = %q", binaryURL)
+	if pkg.DownloadURL != "https://example.invalid/insylus-update-linux-amd64.tar.gz" {
+		t.Fatalf("DownloadURL = %q", pkg.DownloadURL)
 	}
-	if checksumURL != "https://example.invalid/insylus-server-v1.2.3.sha256" {
-		t.Fatalf("checksumURL = %q", checksumURL)
+	if pkg.ChecksumURL != "https://example.invalid/insylus-update-linux-amd64.tar.gz-v1.2.3.sha256" {
+		t.Fatalf("ChecksumURL = %q", pkg.ChecksumURL)
 	}
 }
 
-func TestServerAssetNameCandidatesPreferPlatformAsset(t *testing.T) {
-	got := serverAssetNameCandidates("linux", "amd64")
-	want := []string{"insylus-server-linux-amd64", "insylus-server"}
+func TestUpdateBundleAssetNameCandidatesPreferPlatformAsset(t *testing.T) {
+	got := updateBundleAssetNameCandidates("linux", "amd64")
+	want := []string{"insylus-update-linux-amd64.tar.gz"}
 	if len(got) != len(want) {
-		t.Fatalf("serverAssetNameCandidates len = %d, want %d: %#v", len(got), len(want), got)
+		t.Fatalf("updateBundleAssetNameCandidates len = %d, want %d: %#v", len(got), len(want), got)
 	}
 	for i := range want {
 		if got[i] != want[i] {
-			t.Fatalf("serverAssetNameCandidates[%d] = %q, want %q", i, got[i], want[i])
+			t.Fatalf("updateBundleAssetNameCandidates[%d] = %q, want %q", i, got[i], want[i])
 		}
 	}
 }
 
-func TestServerAssetNameCandidatesPreferArmV7Asset(t *testing.T) {
-	got := serverAssetNameCandidates("linux", "arm")
-	want := []string{"insylus-server-linux-armv7", "insylus-server-linux-arm", "insylus-server"}
+func TestUpdateBundleAssetNameCandidatesPreferArmV7Asset(t *testing.T) {
+	got := updateBundleAssetNameCandidates("linux", "arm")
+	want := []string{"insylus-update-linux-armv7.tar.gz", "insylus-update-linux-arm.tar.gz"}
 	if len(got) != len(want) {
-		t.Fatalf("serverAssetNameCandidates len = %d, want %d: %#v", len(got), len(want), got)
+		t.Fatalf("updateBundleAssetNameCandidates len = %d, want %d: %#v", len(got), len(want), got)
 	}
 	for i := range want {
 		if got[i] != want[i] {
-			t.Fatalf("serverAssetNameCandidates[%d] = %q, want %q", i, got[i], want[i])
+			t.Fatalf("updateBundleAssetNameCandidates[%d] = %q, want %q", i, got[i], want[i])
 		}
 	}
 }
 
-func TestReleaseAssetURLsRequiresBinaryAndChecksum(t *testing.T) {
-	_, _, err := ReleaseAssetURLs(&GitHubRelease{
+func TestReleasePackageAssetsRequiresBundleAndChecksum(t *testing.T) {
+	_, err := ReleasePackageAssets(&GitHubRelease{
 		TagName: "v1.2.3",
-		Assets:  []ReleaseAsset{{Name: "insylus-server", BrowserDownloadURL: "https://example.invalid/insylus-server"}},
+		Assets:  []ReleaseAsset{{Name: "insylus-update-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.invalid/insylus-update-linux-amd64.tar.gz"}},
 	})
 	if !errors.Is(err, ErrMissingReleaseAssets) {
-		t.Fatalf("ReleaseAssetURLs error = %v, want ErrMissingReleaseAssets", err)
+		t.Fatalf("ReleasePackageAssets error = %v, want ErrMissingReleaseAssets", err)
+	}
+}
+
+func TestExtractTarGzExtractsBundleFiles(t *testing.T) {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	payload := []byte("hello")
+	if err := tw.WriteHeader(&tar.Header{Name: "insylus-server", Mode: 0o755, Size: int64(len(payload))}); err != nil {
+		t.Fatalf("WriteHeader: %v", err)
+	}
+	if _, err := tw.Write(payload); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatalf("Close tar: %v", err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatalf("Close gzip: %v", err)
+	}
+
+	dst := t.TempDir()
+	if err := extractTarGz(buf.Bytes(), dst); err != nil {
+		t.Fatalf("extractTarGz: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dst, "insylus-server"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(got) != "hello" {
+		t.Fatalf("bundle content = %q, want hello", string(got))
 	}
 }

@@ -19,7 +19,6 @@ type runtime struct {
 	store      store
 	client     *GitHubClient
 	version    string
-	binaryPath string
 	helperPath string
 	stagingDir string
 	render     func(http.ResponseWriter, string, any)
@@ -30,7 +29,6 @@ func newRuntime(host pluginhost.Host) runtime {
 		store:      newStore(host),
 		client:     NewGitHubClient(),
 		version:    version.ServerVersion,
-		binaryPath: envDefault("INSYLUS_UPDATE_BINARY_PATH", DefaultBinaryPath),
 		helperPath: envDefault("INSYLUS_UPDATE_HELPER_PATH", DefaultHelperPath),
 		stagingDir: envDefault("INSYLUS_UPDATE_STAGING_DIR", DefaultStagingDir),
 		render:     host.Web().Render,
@@ -76,11 +74,11 @@ func (rt runtime) handleCheckUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updateAvailable := latestVersion != rt.version && latestVersion != skippedVersion
-	downloadURL, checksumURL, assetErr := ReleaseAssetURLs(release)
+	pkg, assetErr := ReleasePackageAssets(release)
 	message := ""
 	if updateAvailable && assetErr != nil {
 		updateAvailable = false
-		message = "A server update is available, but the update package is not ready yet."
+		message = "A controller update is available, but the full update bundle is not ready yet."
 	}
 
 	response := UpdateCheckResponse{
@@ -89,8 +87,8 @@ func (rt runtime) handleCheckUpdate(w http.ResponseWriter, r *http.Request) {
 		UpdateAvailable: updateAvailable,
 		Message:         message,
 		ReleaseNotes:    ParseReleaseNotes(release.Body),
-		DownloadURL:     downloadURL,
-		ChecksumURL:     checksumURL,
+		DownloadURL:     pkg.DownloadURL,
+		ChecksumURL:     pkg.ChecksumURL,
 		PublishedAt:     release.PublishedAt,
 		SkippedVersion:  skippedVersion,
 	}
@@ -129,7 +127,7 @@ func (rt runtime) handleApplyUpdate(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	downloadURL, checksumURL, err := ReleaseAssetURLs(release)
+	pkg, err := ReleasePackageAssets(release)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Update package is not available."})
 		return
@@ -147,7 +145,7 @@ func (rt runtime) handleApplyUpdate(w http.ResponseWriter, r *http.Request) {
 	// Run update in background since it takes time
 	go func() {
 		ctx := context.Background()
-		rt.performUpdate(ctx, id, ExtractVersionFromTag(release.TagName), downloadURL, checksumURL)
+		rt.performUpdate(ctx, id, ExtractVersionFromTag(release.TagName), pkg)
 	}()
 
 	writeJSON(w, http.StatusOK, ApplyUpdateResponse{
@@ -157,25 +155,25 @@ func (rt runtime) handleApplyUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 // performUpdate performs the actual update process.
-func (rt runtime) performUpdate(ctx context.Context, updateID int64, version, downloadURL, checksumURL string) {
+func (rt runtime) performUpdate(ctx context.Context, updateID int64, version string, pkg ReleasePackage) {
 	fail := func(format string, args ...any) {
 		_ = rt.store.UpdateUpdateStatusNotes(ctx, updateID, "failed", fmt.Sprintf(format, args...))
 	}
 
-	binaryData, err := rt.client.DownloadFile(ctx, downloadURL)
+	bundleData, err := rt.client.DownloadFile(ctx, pkg.DownloadURL)
 	if err != nil {
 		fail("Download failed: %v", err)
 		return
 	}
 
 	// Step 2: Download and verify checksum
-	checksumData, err := rt.client.DownloadFile(ctx, checksumURL)
+	checksumData, err := rt.client.DownloadFile(ctx, pkg.ChecksumURL)
 	if err != nil {
 		fail("Checksum download failed: %v", err)
 		return
 	}
 
-	if err := rt.client.VerifyChecksum(binaryData, string(checksumData)); err != nil {
+	if err := rt.client.VerifyChecksum(bundleData, string(checksumData)); err != nil {
 		fail("Checksum verification failed: %v", err)
 		return
 	}
@@ -187,18 +185,28 @@ func (rt runtime) performUpdate(ctx context.Context, updateID int64, version, do
 		return
 	}
 
-	stagedBinaryPath := filepath.Join(rt.stagingDir, InsylusBinaryName+"-"+version)
-	if err := os.WriteFile(stagedBinaryPath, binaryData, 0755); err != nil {
-		fail("Write staged server binary failed: %v", err)
+	stagedBundlePath := filepath.Join(rt.stagingDir, pkg.AssetName)
+	if err := os.WriteFile(stagedBundlePath, bundleData, 0644); err != nil {
+		fail("Write staged update bundle failed: %v", err)
 		return
 	}
 
-	if err := rt.validateStagedBinary(stagedBinaryPath, version); err != nil {
+	stagedBundleDir := filepath.Join(rt.stagingDir, "bundle-"+version)
+	if err := os.RemoveAll(stagedBundleDir); err != nil {
+		fail("Reset staged bundle directory failed: %v", err)
+		return
+	}
+	if err := extractTarGz(bundleData, stagedBundleDir); err != nil {
+		fail("Extract update bundle failed: %v", err)
+		return
+	}
+
+	if err := rt.validateStagedBundle(stagedBundleDir, version); err != nil {
 		fail("%v", err)
 		return
 	}
 
-	if err := rt.applyStagedBinary(stagedBinaryPath); err != nil {
+	if err := rt.applyStagedBundle(stagedBundleDir); err != nil {
 		fail("%v", err)
 		return
 	}
@@ -209,8 +217,18 @@ func (rt runtime) performUpdate(ctx context.Context, updateID int64, version, do
 	}
 }
 
-func (rt runtime) validateStagedBinary(path, expectedVersion string) error {
-	cmd := exec.Command(path, "version")
+func (rt runtime) validateStagedBundle(dir, expectedVersion string) error {
+	required := []string{"insylus-server", "insylusctl", "insylus-agent", "insylus-agent-linux-amd64", "insylus-agent-linux-arm64", "insylus-agent-linux-armv7"}
+	for _, name := range required {
+		info, err := os.Stat(filepath.Join(dir, name))
+		if err != nil {
+			return fmt.Errorf("validate staged bundle: missing %s", name)
+		}
+		if info.IsDir() || info.Size() == 0 {
+			return fmt.Errorf("validate staged bundle: invalid %s", name)
+		}
+	}
+	cmd := exec.Command(filepath.Join(dir, "insylus-server"), "version")
 	output, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("validate staged server version: %w", err)
@@ -222,10 +240,10 @@ func (rt runtime) validateStagedBinary(path, expectedVersion string) error {
 	return nil
 }
 
-func (rt runtime) applyStagedBinary(path string) error {
+func (rt runtime) applyStagedBundle(path string) error {
 	cmd := exec.Command("sudo", "-n", rt.helperPath, "apply", path)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("apply server update: %w: %s", err, strings.TrimSpace(string(output)))
+		return fmt.Errorf("apply controller update: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return nil
 }
@@ -234,6 +252,14 @@ func (rt runtime) restartService() error {
 	cmd := exec.Command("sudo", "-n", rt.helperPath, "restart")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("restart server: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func (rt runtime) rollbackAppliedBundle() error {
+	cmd := exec.Command("sudo", "-n", rt.helperPath, "rollback")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("rollback controller update: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return nil
 }
@@ -332,14 +358,7 @@ func (rt runtime) handleRollback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if backup exists
-	backupBinaryPath := rt.binaryPath + ".backup"
-	if _, err := os.Stat(backupBinaryPath); os.IsNotExist(err) {
-		http.Error(w, "No backup found to rollback to", http.StatusBadRequest)
-		return
-	}
-
-	if err := rt.applyStagedBinary(backupBinaryPath); err != nil {
+	if err := rt.rollbackAppliedBundle(); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to restore backup"})
 		return
 	}
