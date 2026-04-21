@@ -61,17 +61,21 @@
               <td>
                 <span class="pill {{ if eq .Status "pending" }}pill-ok{{ else if eq .Status "ignored" }}pill-muted{{ else }}pill{{ end }}">{{ .Status }}</span>
                 {{ if .SourceCIDR }}<div class="muted">{{ .SourceCIDR }}</div>{{ end }}
+                {{ if .KnownTargetID }}<div class="muted">Matches <a href="/devices/{{ .KnownTargetID }}">{{ .KnownTargetName }}</a></div>{{ end }}
               </td>
               <td>{{ formatTime .LastSeenAt }}</td>
               <td>
-                {{ if eq .Status "promoted" }}
+                {{ if eq .Status "known" }}
+                <a class="button-secondary compact-button" href="/devices/{{ .KnownTargetID }}">Open device</a>
+                {{ else if eq .Status "promoted" }}
                 {{ if .PromotedTargetID }}<a class="button-secondary compact-button" href="/devices/{{ .PromotedTargetID }}">Open device</a>{{ end }}
                 {{ else }}
                 <form method="post" action="/discovery/{{ .ID }}/promote" style="display:inline">
                   <button type="submit" class="compact-button">Promote</button>
                 </form>
                 {{ end }}
-                {{ if eq .Status "ignored" }}
+                {{ if eq .Status "known" }}
+                {{ else if eq .Status "ignored" }}
                 <form method="post" action="/discovery/{{ .ID }}/status" style="display:inline">
                   <input type="hidden" name="status" value="pending">
                   <button type="submit" class="button-secondary compact-button">Restore</button>

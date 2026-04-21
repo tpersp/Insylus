@@ -51,7 +51,14 @@ func (s store) listCandidates(ctx context.Context) ([]candidate, error) {
 		}
 		out = append(out, item)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := s.attachKnownTargets(ctx, out); err != nil {
+		return nil, err
+	}
+	sortCandidates(out)
+	return out, nil
 }
 
 func (s store) saveScan(ctx context.Context, subnet string, scan scanResponse) ([]candidate, error) {
@@ -137,7 +144,19 @@ func (s store) setStatus(ctx context.Context, id int64, status string) (candidat
 	default:
 		return candidate{}, fmt.Errorf("invalid status %q", status)
 	}
-	_, err := s.db.ExecContext(ctx, `
+	item, err := s.getCandidate(ctx, id)
+	if err != nil {
+		return candidate{}, err
+	}
+	items := []candidate{item}
+	if err := s.attachKnownTargets(ctx, items); err != nil {
+		return candidate{}, err
+	}
+	item = items[0]
+	if item.KnownTargetID != "" && item.PromotedTargetID == "" {
+		return candidate{}, fmt.Errorf("known inventory device cannot change discovery status")
+	}
+	_, err = s.db.ExecContext(ctx, `
 		update discovered_devices
 		set status = ?, promoted_target_id = case when ? = 'pending' then null else promoted_target_id end,
 			status_note = '', updated_at = ?
@@ -145,7 +164,15 @@ func (s store) setStatus(ctx context.Context, id int64, status string) (candidat
 	if err != nil {
 		return candidate{}, err
 	}
-	return s.getCandidate(ctx, id)
+	item, err = s.getCandidate(ctx, id)
+	if err != nil {
+		return candidate{}, err
+	}
+	items = []candidate{item}
+	if err := s.attachKnownTargets(ctx, items); err != nil {
+		return candidate{}, err
+	}
+	return items[0], nil
 }
 
 func (s store) promoteCandidate(ctx context.Context, id int64) (candidate, pluginhost.Target, error) {
@@ -153,11 +180,23 @@ func (s store) promoteCandidate(ctx context.Context, id int64) (candidate, plugi
 	if err != nil {
 		return candidate{}, pluginhost.Target{}, err
 	}
+	items := []candidate{item}
+	if err := s.attachKnownTargets(ctx, items); err != nil {
+		return candidate{}, pluginhost.Target{}, err
+	}
+	item = items[0]
 	if item.PromotedTargetID != "" {
 		target, getErr := s.targets.Get(ctx, item.PromotedTargetID)
 		if getErr == nil {
 			return item, target, nil
 		}
+	}
+	if item.KnownTargetID != "" {
+		target, getErr := s.targets.Get(ctx, item.KnownTargetID)
+		if getErr == nil {
+			return item, target, fmt.Errorf("device already exists in inventory as %q", target.Name)
+		}
+		return item, pluginhost.Target{}, fmt.Errorf("device already exists in inventory")
 	}
 
 	name, err := s.uniqueTargetName(ctx, item.DisplayName)
@@ -192,7 +231,14 @@ func (s store) promoteCandidate(ctx context.Context, id int64) (candidate, plugi
 		return candidate{}, pluginhost.Target{}, err
 	}
 	item, err = s.getCandidate(ctx, id)
-	return item, target, err
+	if err != nil {
+		return candidate{}, pluginhost.Target{}, err
+	}
+	items = []candidate{item}
+	if err := s.attachKnownTargets(ctx, items); err != nil {
+		return candidate{}, pluginhost.Target{}, err
+	}
+	return items[0], target, nil
 }
 
 func (s store) uniqueTargetName(ctx context.Context, raw string) (string, error) {
@@ -299,4 +345,79 @@ func ipStringList(values ...string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+func (s store) attachKnownTargets(ctx context.Context, items []candidate) error {
+	if len(items) == 0 {
+		return nil
+	}
+	targets, err := s.targets.List(ctx)
+	if err != nil {
+		return err
+	}
+	for i := range items {
+		if items[i].PromotedTargetID != "" {
+			continue
+		}
+		target, ok := matchKnownTarget(items[i], targets)
+		if !ok {
+			continue
+		}
+		items[i].KnownTargetID = target.ID
+		items[i].KnownTargetName = target.Name
+		items[i].Status = "known"
+		if items[i].StatusNote == "" {
+			items[i].StatusNote = "already present in devices"
+		}
+	}
+	return nil
+}
+
+func matchKnownTarget(item candidate, targets []pluginhost.Target) (pluginhost.Target, bool) {
+	itemIP := strings.TrimSpace(item.IPAddress)
+	itemHost := strings.TrimSpace(item.Hostname)
+	itemName := strings.TrimSpace(item.DisplayName)
+	for _, target := range targets {
+		for _, ip := range target.IPs {
+			if strings.TrimSpace(ip) == itemIP && itemIP != "" {
+				return target, true
+			}
+		}
+		if itemHost != "" && strings.EqualFold(strings.TrimSpace(target.Hostname), itemHost) {
+			return target, true
+		}
+		if itemName != "" && strings.EqualFold(strings.TrimSpace(target.Name), itemName) {
+			return target, true
+		}
+	}
+	return pluginhost.Target{}, false
+}
+
+func sortCandidates(items []candidate) {
+	sort.SliceStable(items, func(i, j int) bool {
+		if cmp := compareIPs(items[i].IPAddress, items[j].IPAddress); cmp != 0 {
+			return cmp < 0
+		}
+		leftRank := candidateStatusRank(items[i])
+		rightRank := candidateStatusRank(items[j])
+		if leftRank != rightRank {
+			return leftRank < rightRank
+		}
+		return strings.ToLower(items[i].DisplayName) < strings.ToLower(items[j].DisplayName)
+	})
+}
+
+func candidateStatusRank(item candidate) int {
+	switch item.Status {
+	case "known":
+		return 0
+	case statusPending:
+		return 1
+	case statusIgnored:
+		return 2
+	case statusPromoted:
+		return 3
+	default:
+		return 4
+	}
 }

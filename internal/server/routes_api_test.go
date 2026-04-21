@@ -343,6 +343,68 @@ func TestDiscoveryPluginListsAndPromotesCandidates(t *testing.T) {
 	}
 }
 
+func TestDiscoveryPluginSortsByIPAndMarksKnownDevices(t *testing.T) {
+	app := newTestAppWithEnabledPlugins(t, Config{
+		DBPath: filepath.Join(t.TempDir(), "insylus.db"),
+	}, "discovery")
+	defer app.Close()
+
+	var knownTarget pluginhost.Target
+	doJSONRequest(t, app.Handler(), http.MethodPost, "/api/targets", "", pluginhost.TargetInput{
+		Name:     "MiscServer",
+		Kind:     "linux-host",
+		Hostname: "miscserver.local",
+		IPs:      []string{"10.10.10.22"},
+	}, &knownTarget)
+
+	now := "2026-04-21T12:00:00Z"
+	for _, row := range []struct {
+		fingerprint string
+		name        string
+		host        string
+		ip          string
+	}{
+		{"ip:10.10.10.100", "device-100", "", "10.10.10.100"},
+		{"ip:10.10.10.22", "MiscServer", "miscserver.local", "10.10.10.22"},
+		{"ip:10.10.10.3", "device-3", "", "10.10.10.3"},
+	} {
+		if _, err := app.store.db.ExecContext(context.Background(), `
+			insert into discovered_devices (
+				fingerprint, display_name, hostname, ip_address, mac_address, open_ports_json,
+				status, status_note, source_cidr, kind_hint, first_seen_at, last_seen_at, created_at, updated_at
+			)
+			values (?, ?, ?, ?, '', '[]', 'pending', '', '10.10.10.0/24', 'linux-host', ?, ?, ?, ?)`,
+			row.fingerprint, row.name, row.host, row.ip, now, now, now, now); err != nil {
+			t.Fatalf("insert discovered device %s: %v", row.ip, err)
+		}
+	}
+
+	type discoveredCandidate struct {
+		ID            int64  `json:"id"`
+		IPAddress     string `json:"ip_address"`
+		Status        string `json:"status"`
+		KnownTargetID string `json:"known_target_id"`
+	}
+	var candidates []discoveredCandidate
+	doJSONRequest(t, app.Handler(), http.MethodGet, "/api/discovery", "", nil, &candidates)
+	if len(candidates) != 3 {
+		t.Fatalf("expected 3 discovery candidates, got %+v", candidates)
+	}
+	if candidates[0].IPAddress != "10.10.10.3" || candidates[1].IPAddress != "10.10.10.22" || candidates[2].IPAddress != "10.10.10.100" {
+		t.Fatalf("unexpected discovery order: %+v", candidates)
+	}
+	if candidates[1].Status != "known" || candidates[1].KnownTargetID != knownTarget.ID {
+		t.Fatalf("expected known device match for 10.10.10.22, got %+v", candidates[1])
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/discovery/"+strconv.FormatInt(candidates[1].ID, 10)+"/promote", nil)
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected known device promote to fail with 400, got %d body %q", rec.Code, rec.Body.String())
+	}
+}
+
 func TestAgentPolicyIsUnmanagedWithoutAccess(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()

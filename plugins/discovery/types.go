@@ -20,6 +20,8 @@ type candidate struct {
 	SourceCIDR       string    `json:"source_cidr,omitempty"`
 	KindHint         string    `json:"kind_hint,omitempty"`
 	PromotedTargetID string    `json:"promoted_target_id,omitempty"`
+	KnownTargetID    string    `json:"known_target_id,omitempty"`
+	KnownTargetName  string    `json:"known_target_name,omitempty"`
 	FirstSeenAt      time.Time `json:"first_seen_at"`
 	LastSeenAt       time.Time `json:"last_seen_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
