@@ -243,6 +243,37 @@ func TestJSONResponsesUseSharedContentType(t *testing.T) {
 	}
 }
 
+func TestBaseMiddlewareAddsSecurityHeaders(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/plugins", nil))
+
+	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("X-Content-Type-Options = %q, want nosniff", got)
+	}
+	if got := rec.Header().Get("Referrer-Policy"); got != "same-origin" {
+		t.Fatalf("Referrer-Policy = %q, want same-origin", got)
+	}
+}
+
+func TestBaseMiddlewareLimitsRequestBody(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	body := bytes.NewReader(bytes.Repeat([]byte("x"), maxRequestBodyBytes+1))
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/targets", body)
+	req.Header.Set("Content-Type", "application/json")
+
+	app.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestWebLandingAndDevicesRoutes(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()
@@ -287,6 +318,46 @@ func TestKeyWebPagesRender(t *testing.T) {
 		if !bytes.Contains(rec.Body.Bytes(), []byte("<main")) {
 			t.Fatalf("GET %s did not render a page body", path)
 		}
+	}
+}
+
+func TestSSHKeysPageIncludesOperatorGuide(t *testing.T) {
+	app := newTestAppWithEnabledPlugins(t, Config{
+		DBPath: filepath.Join(t.TempDir(), "insylus.db"),
+	}, "access")
+	defer app.Close()
+
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/keys", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /keys status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	for _, want := range [][]byte{
+		[]byte("Get Your Public Key"),
+		[]byte("ssh-keygen -t ed25519"),
+		[]byte("cat ~/.ssh/id_ed25519.pub"),
+		[]byte("Never paste a private key"),
+		[]byte("access-managed device page"),
+	} {
+		if !bytes.Contains(rec.Body.Bytes(), want) {
+			t.Fatalf("GET /keys missing %q", want)
+		}
+	}
+}
+
+func TestRenderFailureReturnsCleanServerError(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+	rec := httptest.NewRecorder()
+
+	app.render(rec, "missing-template.html", nil)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+	if rec.Header().Get("Content-Type") == "text/html; charset=utf-8" {
+		t.Fatalf("render failure should not claim HTML content type")
 	}
 }
 

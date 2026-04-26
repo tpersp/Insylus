@@ -2,15 +2,25 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"insylus/internal/server"
 	"insylus/internal/version"
+)
+
+const (
+	serverReadHeaderTimeout = 5 * time.Second
+	serverIdleTimeout       = 60 * time.Second
+	serverShutdownTimeout   = 10 * time.Second
 )
 
 func main() {
@@ -39,11 +49,60 @@ func main() {
 	if err != nil {
 		logger.Fatal(err)
 	}
-	defer app.Close()
+	defer func() {
+		if err := app.Close(); err != nil {
+			logger.Printf("close app: %v", err)
+		}
+	}()
 
-	logger.Printf("listening on %s", cfg.ListenAddr)
-	if err := http.ListenAndServe(cfg.ListenAddr, app.Handler()); err != nil {
+	if err := serve(cfg.ListenAddr, app.Handler(), logger); err != nil {
 		logger.Fatal(err)
+	}
+}
+
+func serve(addr string, handler http.Handler, logger *log.Logger) error {
+	srv := newHTTPServer(addr, handler)
+	errCh := make(chan error, 1)
+	go func() {
+		if logger != nil {
+			logger.Printf("listening on %s", addr)
+		}
+		errCh <- srv.ListenAndServe()
+	}()
+
+	stopCh := make(chan os.Signal, 1)
+	signal.Notify(stopCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(stopCh)
+
+	select {
+	case err := <-errCh:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case sig := <-stopCh:
+		if logger != nil {
+			logger.Printf("received %s, shutting down", sig)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), serverShutdownTimeout)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			return err
+		}
+		err := <-errCh
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	}
+}
+
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: serverReadHeaderTimeout,
+		IdleTimeout:       serverIdleTimeout,
 	}
 }
 

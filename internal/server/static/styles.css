@@ -336,6 +336,11 @@ a {
   flex: 1;
 }
 
+.quiet-notice {
+  align-items: flex-start;
+  background: var(--bg-elevated);
+}
+
 .section-heading {
   display: flex;
   align-items: start;
@@ -400,6 +405,43 @@ a {
 .stack {
   display: grid;
   gap: 0.8rem;
+}
+
+.guide-steps {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.guide-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+}
+
+.guide-step strong {
+  display: block;
+  margin-bottom: 0.45rem;
+}
+
+.guide-step pre {
+  margin: 0;
+}
+
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent);
+  font-weight: 900;
 }
 
 .quick-add,
@@ -1291,8 +1333,9 @@ pre {
   }
 
   .topology-list li,
-  .inline-edit-form {
+  .inline-edit-form,
+  .guide-step {
     align-items: stretch;
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
 }

@@ -10,34 +10,111 @@
 <body>
   {{ template "header" . }}
   <main class="page">
-<section class="panel">
-  <h2>Add SSH Key</h2>
-  <form method="post" action="/keys" class="stack">
-    <label>Name <input type="text" name="name" placeholder="operator-laptop"></label>
-    <label>Public key <textarea name="public_key" rows="4" placeholder="ssh-ed25519 AAAA... comment"></textarea></label>
-    <button type="submit">Store key</button>
-  </form>
-</section>
+    <div class="page-title">
+      <div>
+        <p class="eyebrow">Access</p>
+        <h2>SSH Keys</h2>
+        <div class="title-meta">
+          <span>Store public keys for managed device access</span>
+          <span>{{ len .Keys }} registered</span>
+        </div>
+      </div>
+      <div class="title-actions">
+        <a class="button-secondary" href="/access/settings">Access settings</a>
+      </div>
+    </div>
 
-<section class="panel">
-  <h2>Registered Keys</h2>
-  <table>
-    <thead>
-      <tr><th>Name</th><th>Fingerprint</th><th>Created</th></tr>
-    </thead>
-    <tbody>
-      {{ range .Keys }}
-      <tr>
-        <td>{{ .Name }}</td>
-        <td><code>{{ .Fingerprint }}</code></td>
-        <td>{{ formatTime .CreatedAt }}</td>
-      </tr>
-      {{ else }}
-      <tr><td colspan="3">No keys registered yet.</td></tr>
-      {{ end }}
-    </tbody>
-  </table>
-</section>
+    <section class="grid">
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">New Key</p>
+            <h2>Add Public Key</h2>
+          </div>
+        </div>
+        <form method="post" action="/keys" class="settings-form">
+          <label>Key name
+            <input type="text" name="name" placeholder="operator-laptop" autocomplete="off" required>
+            <span class="subtle">Use a name that identifies the person or workstation.</span>
+          </label>
+          <label>Public key
+            <textarea name="public_key" rows="5" placeholder="ssh-ed25519 AAAA... operator@laptop" spellcheck="false" required></textarea>
+            <span class="subtle">Paste the public key line only. Never paste a private key.</span>
+          </label>
+          <button type="submit">Store key</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Guide</p>
+            <h2>Get Your Public Key</h2>
+          </div>
+        </div>
+        <div class="guide-steps">
+          <div class="guide-step">
+            <span class="step-number">1</span>
+            <div>
+              <strong>Check for an existing key</strong>
+              <pre><code>ls ~/.ssh/*.pub</code></pre>
+            </div>
+          </div>
+          <div class="guide-step">
+            <span class="step-number">2</span>
+            <div>
+              <strong>Create one if needed</strong>
+              <pre><code>ssh-keygen -t ed25519 -C "$USER@$(hostname)"</code></pre>
+            </div>
+          </div>
+          <div class="guide-step">
+            <span class="step-number">3</span>
+            <div>
+              <strong>Print the public key to paste here</strong>
+              <pre><code>cat ~/.ssh/id_ed25519.pub</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Registered</p>
+          <h2>Stored Keys</h2>
+        </div>
+      </div>
+      <div class="notice-panel quiet-notice">
+        <strong>How Insylus uses these keys</strong>
+        <span>Choose a stored key on an access-managed device page. The agent writes the selected public key into the managed account's authorized_keys file.</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Fingerprint</th><th>Created</th></tr>
+          </thead>
+          <tbody>
+            {{ range .Keys }}
+            <tr>
+              <td><strong>{{ .Name }}</strong></td>
+              <td><code>{{ .Fingerprint }}</code></td>
+              <td>{{ formatTime .CreatedAt }}</td>
+            </tr>
+            {{ else }}
+            <tr>
+              <td colspan="3">
+                <div class="empty-state">
+                  <strong>No keys registered yet.</strong>
+                  <span>Add a public key above, then assign it from a device page after switching that device to access-managed mode.</span>
+                </div>
+              </td>
+            </tr>
+            {{ end }}
+          </tbody>
+        </table>
+      </div>
+    </section>
   </main>
 </body>
 </html>

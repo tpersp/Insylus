@@ -23,6 +23,8 @@ import (
 
 const Version = version.AgentVersion
 
+const maxErrorBodyBytes = 64 * 1024
+
 type Config struct {
 	ServerURL      string        `json:"server_url"`
 	DeviceID       string        `json:"device_id"`
@@ -155,7 +157,7 @@ func (r *Runner) doJSON(ctx context.Context, method, path, token string, request
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		msg, _ := io.ReadAll(resp.Body)
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
 		return fmt.Errorf("%s: %s", resp.Status, strings.TrimSpace(string(msg)))
 	}
 	if responseBody == nil {

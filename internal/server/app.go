@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"fmt"
@@ -19,6 +20,8 @@ import (
 
 //go:embed templates/*.html static/*
 var embeddedFiles embed.FS
+
+const maxRequestBodyBytes = 10 << 20
 
 type Config struct {
 	ListenAddr      string
@@ -190,7 +193,18 @@ func (a *App) Handler() http.Handler {
 	for _, route := range a.webRoutes {
 		mux.Handle(route.Pattern, a.pluginGate(route.PluginID, http.HandlerFunc(route.Handler)))
 	}
-	return mux
+	return a.withBaseMiddleware(mux)
+}
+
+func (a *App) withBaseMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "same-origin")
+		if r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (a *App) pluginGate(pluginID string, next http.Handler) http.Handler {
@@ -207,10 +221,13 @@ func (a *App) pluginGate(pluginID string, next http.Handler) http.Handler {
 }
 
 func (a *App) render(w http.ResponseWriter, name string, data any) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := a.templates.ExecuteTemplate(w, name, data); err != nil {
+	var buf bytes.Buffer
+	if err := a.templates.ExecuteTemplate(&buf, name, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = buf.WriteTo(w)
 }
 
 func (a *App) baseURL(r *http.Request) string {

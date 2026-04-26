@@ -8,8 +8,14 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"insylus/internal/shared"
+)
+
+const (
+	DefaultTimeout    = 20 * time.Second
+	MaxErrorBodyBytes = 64 * 1024
 )
 
 type Client struct {
@@ -25,7 +31,7 @@ func DefaultServerURL() string {
 }
 
 func NewClient(baseURL string) Client {
-	return Client{BaseURL: strings.TrimRight(baseURL, "/"), HTTPClient: http.DefaultClient}
+	return Client{BaseURL: strings.TrimRight(baseURL, "/"), HTTPClient: &http.Client{Timeout: DefaultTimeout}}
 }
 
 func (c Client) Get(path string) (*http.Response, error) {
@@ -55,7 +61,7 @@ func (c Client) httpClient() *http.Client {
 	if c.HTTPClient != nil {
 		return c.HTTPClient
 	}
-	return http.DefaultClient
+	return &http.Client{Timeout: DefaultTimeout}
 }
 
 func PrintRawJSON(r io.Reader) {
@@ -98,7 +104,7 @@ func URLQueryEscape(v string) string {
 }
 
 func HandleErrorResponse(resp *http.Response) {
-	body, _ := io.ReadAll(resp.Body)
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, MaxErrorBodyBytes))
 	if resp.StatusCode == http.StatusConflict {
 		var conflict shared.DeviceFindConflict
 		if err := json.Unmarshal(body, &conflict); err == nil && len(conflict.Matches) > 0 {

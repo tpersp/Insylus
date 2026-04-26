@@ -1,13 +1,32 @@
 package agent
 
 import (
+	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestDoJSONCapsErrorBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, strings.Repeat("x", maxErrorBodyBytes+1024), http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	runner := New(Config{ServerURL: server.URL})
+	err := runner.doJSON(context.Background(), http.MethodGet, "/", "", nil, nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if len(err.Error()) > maxErrorBodyBytes+256 {
+		t.Fatalf("error too large: %d", len(err.Error()))
+	}
+}
 
 func TestIsPreferredHostInterface(t *testing.T) {
 	tests := []struct {
