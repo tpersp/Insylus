@@ -746,6 +746,23 @@ th,
   stroke-linejoin: round;
 }
 
+.health-point {
+  stroke: var(--bg-elevated);
+  stroke-width: 2;
+}
+
+.health-point.load {
+  fill: #7dd3fc;
+}
+
+.health-point.memory {
+  fill: #67d391;
+}
+
+.health-point.disk {
+  fill: #f0b429;
+}
+
 .note {
   white-space: pre-wrap;
   line-height: 1.55;

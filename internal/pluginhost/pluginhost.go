@@ -99,6 +99,7 @@ type DeviceAdminService interface {
 }
 
 type AgentControllerService interface {
+	SaveCheckIn(ctx context.Context, deviceID string, health shared.HealthSnapshot, install shared.AgentInstallPaths) error
 	PolicyForDevice(ctx context.Context, baseURL string, device shared.Device, goos, goarch string) (shared.AgentPolicyResponse, error)
 	SaveAgentUpdateStatus(ctx context.Context, deviceID string, report shared.AgentUpdateReport) error
 	SaveReport(ctx context.Context, token string, report shared.DeviceReport) error

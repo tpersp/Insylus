@@ -1858,7 +1858,13 @@ func classifyServiceHealth(state string, missing bool) shared.ServiceHealth {
 	if state == "" {
 		return shared.ServiceHealthHealthy
 	}
-	unhealthyMarkers := []string{"failed", "error", "unhealthy", "stopped", "exited", "dead", "down", "inactive"}
+	neutralMarkers := []string{"stopped", "exited", "inactive", "paused"}
+	for _, marker := range neutralMarkers {
+		if strings.Contains(state, marker) {
+			return shared.ServiceHealthUnknown
+		}
+	}
+	unhealthyMarkers := []string{"failed", "error", "unhealthy", "dead", "down"}
 	for _, marker := range unhealthyMarkers {
 		if strings.Contains(state, marker) {
 			return shared.ServiceHealthUnhealthy

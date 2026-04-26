@@ -15,6 +15,10 @@ type agentControllerService struct {
 	app *App
 }
 
+func (s agentControllerService) SaveCheckIn(ctx context.Context, deviceID string, health shared.HealthSnapshot, install shared.AgentInstallPaths) error {
+	return s.app.store.UpdateCheckIn(ctx, deviceID, health, install)
+}
+
 func (s agentControllerService) PolicyForDevice(ctx context.Context, baseURL string, device shared.Device, goos, goarch string) (shared.AgentPolicyResponse, error) {
 	policy, err := s.app.store.GetPolicyForDevice(ctx, device.ID)
 	if err != nil {

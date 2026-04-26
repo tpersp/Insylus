@@ -367,7 +367,7 @@
           <p><span>Load</span>{{ if .Inventory.Health.LoadAverage }}{{ .Inventory.Health.LoadAverage }}{{ else }}unknown{{ end }}</p>
           <p><span>Memory</span>{{ if .Inventory.Health.MemoryUsed }}{{ .Inventory.Health.MemoryUsed }}{{ else }}unknown{{ end }}</p>
           <p><span>Disk</span>{{ if .Inventory.Health.DiskUsed }}{{ .Inventory.Health.DiskUsed }}{{ else }}unknown{{ end }}</p>
-          <p><span>Uptime</span>{{ if .Inventory.Health.Uptime }}{{ .Inventory.Health.Uptime }}{{ else }}unknown{{ end }}</p>
+          <p><span>Uptime</span>{{ formatUptime .Inventory.Health.Uptime }}</p>
         </div>
         <div class="health-history" data-device-id="{{ .Target.ID }}" data-window="{{ .HealthWindow }}">
           <div class="health-history-toolbar">
@@ -486,6 +486,10 @@
     return `<polyline class="${klass}" fill="none" points="${points.map((p) => p.join(',')).join(' ')}"></polyline>`;
   }
 
+  function pointMarkers(points, klass) {
+    return points.map((p) => `<circle class="${klass}" cx="${p[0]}" cy="${p[1]}" r="3.2"></circle>`).join('');
+  }
+
   function draw(samples) {
     if (!samples.length) {
       svg.innerHTML = '';
@@ -493,7 +497,7 @@
       setLegend(null);
       return;
     }
-    status.textContent = '';
+    status.textContent = samples.length < 2 ? 'Waiting for another sample to draw a trend.' : '';
     const firstTs = new Date(samples[0].recorded_at).getTime();
     const lastTs = new Date(samples[samples.length - 1].recorded_at).getTime();
     const span = Math.max(lastTs - firstTs, 1);
@@ -530,6 +534,9 @@
       ${polyline(loadPoints, 'health-series load')}
       ${polyline(memPoints, 'health-series memory')}
       ${polyline(diskPoints, 'health-series disk')}
+      ${pointMarkers(loadPoints, 'health-point load')}
+      ${pointMarkers(memPoints, 'health-point memory')}
+      ${pointMarkers(diskPoints, 'health-point disk')}
       <text class="health-axis" x="${P.left}" y="${H - 6}" text-anchor="start">${startLabel}</text>
       <text class="health-axis" x="${W - P.right}" y="${H - 6}" text-anchor="end">${endLabel}</text>
       <text class="health-axis" x="${W - P.right}" y="${P.top + 12}" text-anchor="end">Load max ${maxLoad.toFixed(2)}</text>

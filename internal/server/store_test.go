@@ -878,6 +878,32 @@ func TestPruneMissingServiceInstances(t *testing.T) {
 	}
 }
 
+func TestServiceHealthTreatsExpectedOffStatesAsNeutral(t *testing.T) {
+	cases := map[string]shared.ServiceHealth{
+		"stopped":           shared.ServiceHealthUnknown,
+		"exited (0)":        shared.ServiceHealthUnknown,
+		"inactive":          shared.ServiceHealthUnknown,
+		"paused":            shared.ServiceHealthUnknown,
+		"failed":            shared.ServiceHealthUnhealthy,
+		"error":             shared.ServiceHealthUnhealthy,
+		"running":           shared.ServiceHealthHealthy,
+		"active":            shared.ServiceHealthHealthy,
+		"up":                shared.ServiceHealthHealthy,
+		"running (healthy)": shared.ServiceHealthHealthy,
+	}
+
+	for state, want := range cases {
+		t.Run(state, func(t *testing.T) {
+			if got := classifyServiceHealth(state, false); got != want {
+				t.Fatalf("classifyServiceHealth(%q) = %q, want %q", state, got, want)
+			}
+		})
+	}
+	if got := classifyServiceHealth("running", true); got != shared.ServiceHealthMissing {
+		t.Fatalf("missing service health = %q, want %q", got, shared.ServiceHealthMissing)
+	}
+}
+
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
 	store, err := OpenStore(filepath.Join(t.TempDir(), "insylus.db"))

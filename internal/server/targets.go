@@ -163,6 +163,17 @@ func (s targetService) Update(ctx context.Context, id string, input pluginhost.T
 		return pluginhost.Target{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `
+		update devices
+		set name = ?, updated_at = ?
+		where id = ?`,
+		input.Name, now, id); err != nil {
+		_ = tx.Rollback()
+		if isUniqueConstraint(err, "devices_name_unique") {
+			return pluginhost.Target{}, ErrDuplicateDeviceName
+		}
+		return pluginhost.Target{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `
 		update targets
 		set name = ?, kind = ?, hostname = ?, ips_json = ?, tags_json = ?, note = ?, updated_at = ?
 		where id = ?`,

@@ -412,6 +412,36 @@ func TestTargetsAPI(t *testing.T) {
 	}
 }
 
+func TestTargetRenameUpdatesInventoryIdentity(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	var target pluginhost.Target
+	doJSONRequest(t, app.Handler(), http.MethodPost, "/api/targets", "", pluginhost.TargetInput{
+		Name:    "device-10-10-10-35",
+		Kind:    "linux-host",
+		IPs:     []string{"10.10.10.35"},
+		SSHHost: "10.10.10.35",
+	}, &target)
+
+	var renamed pluginhost.Target
+	doJSONRequest(t, app.Handler(), http.MethodPut, "/api/targets/"+target.ID, "", pluginhost.TargetInput{
+		Name:    "Jellyfin",
+		Kind:    target.Kind,
+		IPs:     target.IPs,
+		SSHHost: target.SSHHost,
+	}, &renamed)
+	if renamed.Name != "Jellyfin" {
+		t.Fatalf("renamed target name = %q, want Jellyfin", renamed.Name)
+	}
+
+	var info shared.DeviceInventoryInfo
+	doJSONRequest(t, app.Handler(), http.MethodGet, "/api/devices/"+target.ID, "", nil, &info)
+	if info.Identity.Name != "Jellyfin" {
+		t.Fatalf("inventory identity name = %q, want Jellyfin", info.Identity.Name)
+	}
+}
+
 func TestDockerConfigCreatesStandaloneTarget(t *testing.T) {
 	app := newTestAppWithEnabledPlugins(t, Config{
 		DBPath: filepath.Join(t.TempDir(), "insylus.db"),
@@ -785,6 +815,48 @@ func TestDeviceHealthHistoryAPI(t *testing.T) {
 	}
 	last := history.Samples[len(history.Samples)-1]
 	if last.LoadAverage1 == 0 || last.MemoryUsedPct == 0 || last.DiskUsedPct == 0 {
+		t.Fatalf("unexpected health sample: %+v", last)
+	}
+}
+
+func TestAgentCheckInAPIAddsHealthHistorySample(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	device, err := app.store.CreateDevice(context.Background(), "MiscServer")
+	if err != nil {
+		t.Fatalf("CreateDevice: %v", err)
+	}
+	var bootstrap shared.BootstrapResponse
+	doJSONRequest(t, app.Handler(), http.MethodPost, "/api/bootstrap/register", "", shared.BootstrapRequest{
+		BootstrapToken: device.BootstrapToken,
+		Hostname:       "miscserver",
+		OSName:         "Ubuntu",
+		AgentVersion:   "test",
+	}, &bootstrap)
+
+	doJSONRequest(t, app.Handler(), http.MethodPost, "/api/checkin", bootstrap.AgentToken, shared.CheckInRequest{
+		Health: shared.HealthSnapshot{
+			Hostname:     "miscserver",
+			OSName:       "Ubuntu",
+			IPs:          []string{"10.10.10.22"},
+			Uptime:       "1229802.04s",
+			LoadAverage:  "0.02 0.03 0.06",
+			MemoryUsed:   "9.7%",
+			DiskUsed:     "47.8%",
+			AgentVersion: "test",
+			AgentGOOS:    "linux",
+			AgentGOARCH:  "amd64",
+		},
+	}, nil)
+
+	var history shared.DeviceHealthHistory
+	doJSONRequest(t, app.Handler(), http.MethodGet, "/api/devices/"+device.ID+"/health-history?window=1h", "", nil, &history)
+	if len(history.Samples) == 0 {
+		t.Fatal("expected check-in API to create a health history sample")
+	}
+	last := history.Samples[len(history.Samples)-1]
+	if last.LoadAverage1 != 0.02 || last.MemoryUsedPct != 9.7 || last.DiskUsedPct != 47.8 {
 		t.Fatalf("unexpected health sample: %+v", last)
 	}
 }

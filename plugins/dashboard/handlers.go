@@ -189,9 +189,9 @@ func (rt runtime) serviceHotList(r *http.Request) ([]serviceHealthItem, error) {
 		select s.name, s.kind, s.health, s.state, s.last_seen_at, d.id, d.name
 		from service_instances s
 		join devices d on d.id = s.device_id
-		where s.health in ('unhealthy', 'missing', 'unknown')
+		where s.health in ('unhealthy', 'missing')
 		order by
-			case s.health when 'unhealthy' then 0 when 'missing' then 1 else 2 end,
+			case s.health when 'unhealthy' then 0 else 1 end,
 			coalesce(s.last_seen_at, '') desc,
 			s.name asc
 		limit 8`)

@@ -141,13 +141,20 @@ func (rt runtime) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	ipsJSON, _ := json.Marshal(req.Health.IPs)
-	now := time.Now().UTC().Format(time.RFC3339)
-	if _, err := rt.db.ExecContext(r.Context(), `
-		update devices set hostname = ?, os_name = ?, ips_json = ?, agent_version = ?, last_seen_at = ?, updated_at = ?
-		where id = ?`, req.Health.Hostname, req.Health.OSName, string(ipsJSON), req.Health.AgentVersion, now, now, targetID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	if rt.controller != nil {
+		if err := rt.controller.SaveCheckIn(r.Context(), targetID, req.Health, req.AgentInstall); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		ipsJSON, _ := json.Marshal(req.Health.IPs)
+		now := time.Now().UTC().Format(time.RFC3339)
+		if _, err := rt.db.ExecContext(r.Context(), `
+			update devices set hostname = ?, os_name = ?, ips_json = ?, agent_version = ?, last_seen_at = ?, updated_at = ?
+			where id = ?`, req.Health.Hostname, req.Health.OSName, string(ipsJSON), req.Health.AgentVersion, now, now, targetID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 	target, err := rt.targets.Get(r.Context(), targetID)
 	if err == nil {

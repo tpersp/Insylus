@@ -91,6 +91,7 @@ func New(cfg Config, logger *log.Logger) (*App, error) {
 			}
 			return t.Local().Format("2006-01-02 15:04:05")
 		},
+		"formatUptime": formatUptime,
 		"staleClass": func(t time.Time) string {
 			if t.IsZero() {
 				return "state-stale"

@@ -216,7 +216,7 @@ func suggestedName(hostname, ip string) string {
 	if base != "" {
 		return base
 	}
-	return "device-" + strings.ReplaceAll(ip, ".", "-")
+	return ip
 }
 
 func sanitizeName(value string) string {
@@ -237,7 +237,10 @@ func sanitizeName(value string) string {
 		case r >= '0' && r <= '9':
 			b.WriteRune(r)
 			lastDash = false
-		case r == '-' || r == '_' || r == '.' || r == ' ':
+		case r == '.':
+			b.WriteRune(r)
+			lastDash = false
+		case r == '-' || r == '_' || r == ' ':
 			if !lastDash {
 				b.WriteByte('-')
 				lastDash = true

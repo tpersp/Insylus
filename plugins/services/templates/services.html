@@ -28,6 +28,7 @@
         <button type="submit">Filter</button>
         {{ if or .Query .Device }}<a class="button-secondary" href="/services">Clear</a>{{ end }}
       </form>
+      <p class="muted">Stopped, exited, inactive, or paused workloads are treated as neutral/unknown. Missing means Insylus saw the workload before but it is absent from the latest report; prune it when that absence is expected.</p>
       <div class="table-wrap">
         <table class="device-table">
           <thead>
