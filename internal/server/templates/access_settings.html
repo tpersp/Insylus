@@ -60,16 +60,47 @@
     <section class="panel">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">Managed SSH</p>
-          <h2>Controller Alias Sync</h2>
+          <p class="eyebrow">SSH Alias Sync</p>
+          <h2>Usually Automatic</h2>
         </div>
       </div>
-      <p class="muted">Install the controller-side SSH alias sync to expose friendly SSH aliases for access-managed devices.</p>
-      <div class="facts">
-        <p><span>Install command</span><code>sudo bash /opt/insylus/scripts/install-insylus-ssh-sync.sh</code></p>
-        <p><span>SSH config</span><code>/etc/ssh/ssh_config.d/insylus.conf</code></p>
-        <p><span>Known hosts</span><code>/etc/ssh/ssh_known_hosts_insylus</code></p>
+      <div class="guide-steps">
+        <div class="guide-step">
+          <span class="step-number">?</span>
+          <div>
+            <strong>Why this exists</strong>
+            <p class="muted">The normal Insylus service installer already sets this up on the controller host. This section is here only to explain the helper and show what to check if friendly SSH aliases are missing.</p>
+            <pre><code>ssh atlas
+ssh media-server</code></pre>
+          </div>
+        </div>
+        <div class="guide-step">
+          <span class="step-number">1</span>
+          <div>
+            <strong>Check whether the sync timer is installed</strong>
+            <pre><code>systemctl status --no-pager insylus-ssh-sync.timer
+systemctl status --no-pager insylus-ssh-sync.service</code></pre>
+          </div>
+        </div>
+        <div class="guide-step">
+          <span class="step-number">2</span>
+          <div>
+            <strong>Files it maintains</strong>
+            <div class="facts">
+              <p><span>SSH aliases</span><code>/etc/ssh/ssh_config.d/insylus.conf</code></p>
+              <p><span>Known hosts</span><code>/etc/ssh/ssh_known_hosts_insylus</code></p>
+            </div>
+          </div>
+        </div>
+        <div class="guide-step">
+          <span class="step-number">3</span>
+          <div>
+            <strong>Reinstall only if the timer is missing</strong>
+            <pre><code>sudo bash /opt/insylus/scripts/install-insylus-ssh-sync.sh</code></pre>
+          </div>
+        </div>
       </div>
+      <p class="muted">This does not grant access by itself. It only creates convenient SSH aliases for devices that are already access-managed with access enabled.</p>
     </section>
   </main>
 </body>

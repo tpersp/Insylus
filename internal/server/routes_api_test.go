@@ -346,6 +346,33 @@ func TestSSHKeysPageIncludesOperatorGuide(t *testing.T) {
 	}
 }
 
+func TestAccessSettingsExplainsFriendlySSHAliases(t *testing.T) {
+	app := newTestAppWithEnabledPlugins(t, Config{
+		DBPath: filepath.Join(t.TempDir(), "insylus.db"),
+	}, "access")
+	defer app.Close()
+
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/access/settings", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /access/settings status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	for _, want := range [][]byte{
+		[]byte("SSH Alias Sync"),
+		[]byte("Usually Automatic"),
+		[]byte("normal Insylus service installer already sets this up"),
+		[]byte("ssh atlas"),
+		[]byte("insylus-ssh-sync.timer"),
+		[]byte("Reinstall only if the timer is missing"),
+		[]byte("does not grant access by itself"),
+	} {
+		if !bytes.Contains(rec.Body.Bytes(), want) {
+			t.Fatalf("GET /access/settings missing %q", want)
+		}
+	}
+}
+
 func TestRenderFailureReturnsCleanServerError(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()
