@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"math"
 	"net"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"insylus/internal/httpx"
 	"insylus/internal/pluginhost"
 )
 
@@ -49,9 +51,12 @@ func (rt runtime) startLoop() {
 			delay := 5 * time.Second
 			for {
 				time.Sleep(delay)
-				rt.runChecks(context.Background())
+				if err := rt.runChecks(context.Background()); err != nil {
+					log.Printf("monitor check failed: %v", err)
+				}
 				settings, err := rt.store.Settings(context.Background())
 				if err != nil {
+					log.Printf("monitor settings load failed: %v", err)
 					delay = time.Duration(defaultIntervalSeconds) * time.Second
 					continue
 				}
@@ -144,25 +149,31 @@ func (rt runtime) handleHistoryAPI(w http.ResponseWriter, r *http.Request) {
 
 func (rt runtime) handleCheckNow(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		httpx.MethodNotAllowed(w, r)
 		return
 	}
-	rt.runChecks(context.Background())
+	if err := rt.runChecks(r.Context()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	http.Redirect(w, r, "/monitor", http.StatusSeeOther)
 }
 
 func (rt runtime) handleCheckNowAPI(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		httpx.MethodNotAllowed(w, r)
 		return
 	}
-	rt.runChecks(context.Background())
+	if err := rt.runChecks(r.Context()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (rt runtime) handleSettingsForm(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		httpx.MethodNotAllowed(w, r)
 		return
 	}
 	settings := normalizeSettings(parseInt(r.FormValue("interval_seconds")), parseInt(r.FormValue("timeout_millis")))
@@ -175,12 +186,12 @@ func (rt runtime) handleSettingsForm(w http.ResponseWriter, r *http.Request) {
 
 func (rt runtime) handleSettingsAPI(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		httpx.MethodNotAllowed(w, r)
 		return
 	}
 	var settings Settings
 	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		httpx.InvalidRequest(w)
 		return
 	}
 	settings = normalizeSettings(settings.IntervalSeconds, settings.TimeoutMillis)
@@ -193,7 +204,7 @@ func (rt runtime) handleSettingsAPI(w http.ResponseWriter, r *http.Request) {
 
 func (rt runtime) handleManualTargetForm(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		httpx.MethodNotAllowed(w, r)
 		return
 	}
 	target := ManualTarget{
@@ -215,12 +226,12 @@ func (rt runtime) handleManualTargetForm(w http.ResponseWriter, r *http.Request)
 
 func (rt runtime) handleManualTargetAPI(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		httpx.MethodNotAllowed(w, r)
 		return
 	}
 	var target ManualTarget
 	if err := json.NewDecoder(r.Body).Decode(&target); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		httpx.InvalidRequest(w)
 		return
 	}
 	target.Name = strings.TrimSpace(target.Name)
@@ -238,7 +249,7 @@ func (rt runtime) handleManualTargetAPI(w http.ResponseWriter, r *http.Request) 
 
 func (rt runtime) handleManualTargetDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		httpx.MethodNotAllowed(w, r)
 		return
 	}
 	id, err := strconv.ParseInt(strings.TrimSpace(r.PathValue("id")), 10, 64)
@@ -257,22 +268,22 @@ func (rt runtime) handleManualTargetDelete(w http.ResponseWriter, r *http.Reques
 	http.Redirect(w, r, "/monitor", http.StatusSeeOther)
 }
 
-func (rt runtime) runChecks(ctx context.Context) {
+func (rt runtime) runChecks(ctx context.Context) error {
 	if rt.plugins != nil && !rt.plugins.Enabled("monitor") {
-		return
+		return nil
 	}
 	if !monitorRunning.CompareAndSwap(false, true) {
-		return
+		return nil
 	}
 	defer monitorRunning.Store(false)
 
 	settings, err := rt.store.Settings(ctx)
 	if err != nil {
-		return
+		return err
 	}
 	targets, err := rt.collectTargets(ctx)
 	if err != nil {
-		return
+		return err
 	}
 	timeout := time.Duration(settings.TimeoutMillis) * time.Millisecond
 	samples := make([]sampleRecord, 0, len(targets))
@@ -283,7 +294,10 @@ func (rt runtime) runChecks(ctx context.Context) {
 		}
 		samples = append(samples, runCheck(target, timeout, now))
 	}
-	_ = rt.store.RecordSamples(ctx, samples)
+	if err := rt.store.RecordSamples(ctx, samples); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (rt runtime) collectTargets(ctx context.Context) ([]monitorTarget, error) {
@@ -535,7 +549,5 @@ func compareHosts(a, b string) int {
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	httpx.WriteJSON(w, status, v)
 }

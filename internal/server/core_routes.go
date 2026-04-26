@@ -83,13 +83,15 @@ func (a *App) handlePluginProfileApply(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) handleRestart(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		methodNotAllowed(w, r)
 		return
 	}
 	a.writeJSON(w, http.StatusOK, map[string]string{"status": "restarting"})
 	go func() {
 		cmd := exec.Command("systemctl", "restart", "insylus.service")
-		cmd.Run()
+		if err := cmd.Run(); err != nil && a.logger != nil {
+			a.logger.Printf("restart command failed: %v", err)
+		}
 	}()
 }
 

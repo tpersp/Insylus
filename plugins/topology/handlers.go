@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"insylus/internal/httpx"
 	"insylus/internal/pluginhost"
 	"insylus/internal/shared"
 )
@@ -143,8 +144,7 @@ func (rt runtime) handleGraph(w http.ResponseWriter, r *http.Request) {
 		}
 		graph.Links = append(graph.Links, shared.TopologyGraphLink{ID: fmt.Sprintf("manual:%d", link.ID), From: from, To: to, Label: link.Label, Source: shared.TopologySourceManual, ManualID: link.ID})
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(graph)
+	httpx.WriteJSON(w, http.StatusOK, graph)
 }
 
 func (rt runtime) handleCreateNode(w http.ResponseWriter, r *http.Request) {
@@ -299,8 +299,7 @@ func (rt runtime) handleSaveLayout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(`{"ok":true}`))
+	httpx.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (rt runtime) handleResetLayout(w http.ResponseWriter, r *http.Request) {
@@ -308,8 +307,7 @@ func (rt runtime) handleResetLayout(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(`{"ok":true}`))
+	httpx.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (rt runtime) notFound(w http.ResponseWriter, r *http.Request) {

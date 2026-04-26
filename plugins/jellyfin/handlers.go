@@ -3,13 +3,13 @@ package jellyfin
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"sort"
 	"strings"
 
+	"insylus/internal/httpx"
 	"insylus/internal/pluginhost"
 )
 
@@ -450,17 +450,11 @@ func wantsHTML(r *http.Request) bool {
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return false
-	}
-	return true
+	return httpx.DecodeJSON(w, r, dst)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	httpx.WriteJSON(w, status, v)
 }
 
 func sortItemsByName(items []JellyfinItem) {

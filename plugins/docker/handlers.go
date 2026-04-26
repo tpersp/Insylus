@@ -2,11 +2,12 @@ package docker
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
+
+	"insylus/internal/httpx"
 )
 
 // runtime combines the store and the web renderer.
@@ -336,17 +337,11 @@ func (rt runtime) dockerClientForDevice(r *http.Request, deviceID string) (*Dock
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	httpx.WriteJSON(w, status, v)
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return false
-	}
-	return true
+	return httpx.DecodeJSON(w, r, dst)
 }
 
 // wantsHTML returns true if the client prefers HTML.

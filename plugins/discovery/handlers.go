@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"insylus/internal/httpx"
 	"insylus/internal/pluginhost"
 )
 
@@ -169,9 +170,7 @@ func wantsHTML(r *http.Request) bool {
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
+	httpx.WriteJSON(w, status, value)
 }
 
 func formatSeenSince(t time.Time) string {

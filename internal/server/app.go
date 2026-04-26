@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"embed"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -12,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"insylus/internal/httpx"
 	"insylus/internal/pluginhost"
 	"insylus/internal/shared"
 	"insylus/plugins/registry"
@@ -225,19 +225,13 @@ func (a *App) baseURL(r *http.Request) string {
 }
 
 func (a *App) decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return false
-	}
-	return true
+	return httpx.DecodeJSON(w, r, dst)
 }
 
 func (a *App) writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	httpx.WriteJSON(w, status, v)
 }
 
-func methodNotAllowed(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+func methodNotAllowed(w http.ResponseWriter, r *http.Request) {
+	httpx.MethodNotAllowed(w, r)
 }

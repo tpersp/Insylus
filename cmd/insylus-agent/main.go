@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,61 +13,76 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: insylus-agent [run|install|version]")
-		os.Exit(2)
+	os.Exit(runMain(os.Args, os.Stdout, os.Stderr))
+}
+
+func runMain(args []string, stdout, stderr io.Writer) int {
+	if len(args) < 2 {
+		printUsage(stderr)
+		return 2
 	}
-	switch os.Args[1] {
+	switch args[1] {
 	case "run":
-		run()
+		return runAgent(args[2:], stderr)
 	case "install":
-		install()
+		return installAgent(args[2:], stderr)
 	case "version":
-		fmt.Println(agent.Version)
+		fmt.Fprintln(stdout, agent.Version)
+		return 0
 	default:
-		fmt.Fprintln(os.Stderr, "usage: insylus-agent [run|install|version]")
-		os.Exit(2)
+		printUsage(stderr)
+		return 2
 	}
 }
 
-func run() {
-	fs := flag.NewFlagSet("run", flag.ExitOnError)
+func printUsage(w io.Writer) {
+	fmt.Fprintln(w, "usage: insylus-agent [run|install|version]")
+}
+
+func runAgent(args []string, stderr io.Writer) int {
+	fs := flag.NewFlagSet("run", flag.ContinueOnError)
+	fs.SetOutput(stderr)
 	configPath := fs.String("config", "/etc/insylus-agent/config.json", "config path")
-	if err := fs.Parse(os.Args[2:]); err != nil {
-		fmt.Fprintf(os.Stderr, "run failed: %v\n", err)
-		os.Exit(2)
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(stderr, "run failed: %v\n", err)
+		return 2
 	}
 	cfg, err := agent.LoadConfig(*configPath)
 	if err != nil {
-		panic(err)
+		fmt.Fprintf(stderr, "run failed: %v\n", err)
+		return 1
 	}
 	runner := agent.New(cfg)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	if err := runner.Run(ctx); err != nil && err != context.Canceled {
-		panic(err)
+		fmt.Fprintf(stderr, "run failed: %v\n", err)
+		return 1
 	}
+	return 0
 }
 
-func install() {
-	fs := flag.NewFlagSet("install", flag.ExitOnError)
+func installAgent(args []string, stderr io.Writer) int {
+	fs := flag.NewFlagSet("install", flag.ContinueOnError)
+	fs.SetOutput(stderr)
 	server := fs.String("server", "", "server URL")
 	bootstrapToken := fs.String("bootstrap-token", "", "device bootstrap token")
-	if err := fs.Parse(os.Args[2:]); err != nil {
-		fmt.Fprintf(os.Stderr, "install failed: %v\n", err)
-		os.Exit(2)
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(stderr, "install failed: %v\n", err)
+		return 2
 	}
 	if *server == "" || *bootstrapToken == "" {
-		fmt.Fprintln(os.Stderr, "--server and --bootstrap-token are required")
-		os.Exit(2)
+		fmt.Fprintln(stderr, "--server and --bootstrap-token are required")
+		return 2
 	}
 	exe, err := os.Executable()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "install failed: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "install failed: %v\n", err)
+		return 1
 	}
 	if err := agent.Install(exe, *server, *bootstrapToken); err != nil {
-		fmt.Fprintf(os.Stderr, "install failed: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "install failed: %v\n", err)
+		return 1
 	}
+	return 0
 }

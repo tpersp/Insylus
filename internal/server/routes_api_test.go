@@ -208,6 +208,41 @@ func TestMonitorPluginManualTargetAndHistoryAPI(t *testing.T) {
 	}
 }
 
+func TestMonitorManualTargetAPIRejectsInvalidInput(t *testing.T) {
+	app := newTestAppWithEnabledPlugins(t, Config{
+		DBPath: filepath.Join(t.TempDir(), "insylus.db"),
+	}, "monitor")
+	defer app.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/monitor/targets", bytes.NewReader([]byte(`{"name":"Missing host"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte("name and host are required")) {
+		t.Fatalf("unexpected body: %s", rec.Body.String())
+	}
+}
+
+func TestJSONResponsesUseSharedContentType(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/plugins", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {
+		t.Fatalf("Content-Type = %q", got)
+	}
+}
+
 func TestWebLandingAndDevicesRoutes(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()
@@ -228,6 +263,30 @@ func TestWebLandingAndDevicesRoutes(t *testing.T) {
 	}
 	if !bytes.Contains(devices.Body.Bytes(), []byte("Devices")) {
 		t.Fatalf("GET /devices did not render devices page: %s", devices.Body.String())
+	}
+}
+
+func TestKeyWebPagesRender(t *testing.T) {
+	app := newTestApp(t)
+	defer app.Close()
+	handler := app.Handler()
+
+	var target pluginhost.Target
+	doJSONRequest(t, handler, http.MethodPost, "/api/targets", "", pluginhost.TargetInput{
+		Name:     "atlas",
+		Kind:     "linux-host",
+		Hostname: "atlas.local",
+	}, &target)
+
+	for _, path := range []string{"/", "/devices", "/devices/" + target.ID, "/monitor", "/plugins", "/update"} {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d, want 200: %s", path, rec.Code, rec.Body.String())
+		}
+		if !bytes.Contains(rec.Body.Bytes(), []byte("<main")) {
+			t.Fatalf("GET %s did not render a page body", path)
+		}
 	}
 }
 

@@ -99,6 +99,7 @@ a {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.35rem;
+  min-width: 0;
 }
 
 .topbar nav a {
@@ -109,6 +110,7 @@ a {
   padding: 0.48rem 0.68rem;
   border: 1px solid transparent;
   border-radius: 8px;
+  white-space: nowrap;
 }
 
 .topbar nav a:hover,
@@ -161,6 +163,7 @@ a {
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
+  min-width: 0;
 }
 
 .title-meta {
@@ -452,6 +455,7 @@ select,
 textarea,
 button {
   max-width: 100%;
+  min-width: 0;
   min-height: 2.55rem;
   font: inherit;
   padding: 0.68rem 0.75rem;
@@ -493,6 +497,8 @@ button,
   font-weight: 900;
   text-decoration: none;
   cursor: pointer;
+  line-height: 1.15;
+  text-align: center;
 }
 
 button:hover,
@@ -504,6 +510,7 @@ button:hover,
   border-color: var(--line-strong);
   background: var(--surface-2);
   color: var(--text);
+  text-decoration: none;
 }
 
 .button-secondary:hover {
@@ -556,6 +563,7 @@ button:disabled {
   gap: 0.75rem;
   margin: 0;
   align-items: baseline;
+  min-width: 0;
 }
 
 .split-facts {
@@ -574,6 +582,18 @@ button:disabled {
 .split-facts p > span:first-child {
   color: var(--text-soft);
   font-weight: 850;
+}
+
+.facts p > :last-child,
+.split-facts p > :last-child,
+td,
+th,
+.subtle,
+.muted,
+.metric-note,
+.row-meta {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .health-history {
@@ -817,6 +837,8 @@ pre {
 
 code {
   padding: 0.1rem 0.32rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 pre {
@@ -853,6 +875,7 @@ pre {
 
 .list-row {
   grid-template-columns: auto minmax(0, 1fr) auto;
+  min-width: 0;
 }
 
 .compact-list .list-row {
@@ -1148,6 +1171,13 @@ pre {
   white-space: nowrap;
 }
 
+.section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 @media (max-width: 1100px) {
   .metric-grid,
   .stat-grid {
@@ -1163,6 +1193,11 @@ pre {
 
   .quick-add {
     grid-template-columns: 1fr 1fr;
+    min-width: 0;
+  }
+
+  .stat-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -1175,6 +1210,10 @@ pre {
 
   .topbar nav {
     justify-content: flex-start;
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 0.15rem;
   }
 
   .page,
@@ -1207,6 +1246,20 @@ pre {
     grid-template-columns: 1fr;
   }
 
+  .section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .section-actions,
+  .title-actions,
+  .action-row,
+  .button-group,
+  .hero-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .list-row,
   .timeline a {
     grid-template-columns: auto minmax(0, 1fr);
@@ -1218,7 +1271,8 @@ pre {
   }
 
   button,
-  .button-link {
+  .button-link,
+  .button-secondary {
     width: 100%;
   }
 

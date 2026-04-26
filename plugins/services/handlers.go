@@ -2,11 +2,11 @@ package services
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
 
+	"insylus/internal/httpx"
 	"insylus/internal/pluginhost"
 	"insylus/internal/shared"
 )
@@ -158,9 +158,7 @@ func (rt runtime) resolveDeviceFindForFilter(w http.ResponseWriter, r *http.Requ
 				IPs:      device.IPs,
 			})
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
-		_ = json.NewEncoder(w).Encode(conflict)
+		writeJSON(w, http.StatusConflict, conflict)
 		return "", false
 	}
 	return matches[0].ID, true
@@ -192,7 +190,5 @@ func parseInventoryView(w http.ResponseWriter, r *http.Request, defaultView inve
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	httpx.WriteJSON(w, status, v)
 }

@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -292,9 +291,7 @@ func (a *App) handleDeviceFind(w http.ResponseWriter, r *http.Request) {
 		for _, record := range matches {
 			conflict.Matches = append(conflict.Matches, FindMatchFromRecord(record))
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
-		_ = json.NewEncoder(w).Encode(conflict)
+		a.writeJSON(w, http.StatusConflict, conflict)
 		return
 	}
 	children := childNamesByParent(records)

@@ -2,9 +2,9 @@ package update
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"insylus/internal/httpx"
 	"insylus/internal/pluginhost"
 	"insylus/internal/version"
 )
@@ -82,15 +83,14 @@ func (rt runtime) handleCheckUpdate(w http.ResponseWriter, r *http.Request) {
 // handleApplyUpdate handles the apply update API.
 func (rt runtime) handleApplyUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		httpx.MethodNotAllowed(w, r)
 		return
 	}
 
 	var req struct {
 		Version string `json:"version"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+	if !httpx.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -249,7 +249,7 @@ func (rt runtime) checkForUpdate(ctx context.Context) (UpdateCheckResponse, erro
 	_, _, _, skippedVersion, _ := rt.store.GetUpdateSettings(ctx)
 
 	if err := rt.store.SetLastCheckedAt(ctx); err != nil {
-		// Non-fatal, continue
+		log.Printf("update check timestamp save failed: %v", err)
 	}
 
 	updateAvailable := latestVersion != rt.version && latestVersion != skippedVersion
@@ -283,45 +283,56 @@ func (rt runtime) startAutoUpdateLoop() {
 			for {
 				select {
 				case <-timer.C:
-					rt.maybeAutoApplyLatest(context.Background())
+					if err := rt.maybeAutoApplyLatest(context.Background()); err != nil {
+						log.Printf("automatic update check failed: %v", err)
+					}
 				case <-ticker.C:
-					rt.maybeAutoApplyLatest(context.Background())
+					if err := rt.maybeAutoApplyLatest(context.Background()); err != nil {
+						log.Printf("automatic update check failed: %v", err)
+					}
 				}
 			}
 		}()
 	})
 }
 
-func (rt runtime) maybeAutoApplyLatest(ctx context.Context) {
+func (rt runtime) maybeAutoApplyLatest(ctx context.Context) error {
 	if rt.plugins != nil && !rt.plugins.Enabled("update") {
-		return
+		return nil
 	}
 	autoEnabled, _, _, skippedVersion, err := rt.store.GetUpdateSettings(ctx)
-	if err != nil || !autoEnabled {
-		return
+	if err != nil {
+		return err
+	}
+	if !autoEnabled {
+		return nil
 	}
 	if !autoUpdateRunning.CompareAndSwap(false, true) {
-		return
+		return nil
 	}
 	defer autoUpdateRunning.Store(false)
 
 	response, err := rt.checkForUpdate(ctx)
-	if err != nil || !response.UpdateAvailable || response.LatestVersion == "" || response.LatestVersion == skippedVersion {
-		return
+	if err != nil {
+		return err
+	}
+	if !response.UpdateAvailable || response.LatestVersion == "" || response.LatestVersion == skippedVersion {
+		return nil
 	}
 	release, err := rt.client.FetchReleaseByTag(ctx, versionTag(response.LatestVersion))
 	if err != nil {
-		return
+		return err
 	}
 	pkg, err := ReleasePackageAssets(release)
 	if err != nil {
-		return
+		return err
 	}
 	id, err := rt.store.CreateUpdate(ctx, response.LatestVersion, release.PublishedAt, "pending", "automatic update")
 	if err != nil {
-		return
+		return err
 	}
 	rt.performUpdate(context.Background(), id, response.LatestVersion, pkg)
+	return nil
 }
 
 func (rt runtime) rollbackAppliedBundle() error {
@@ -335,15 +346,14 @@ func (rt runtime) rollbackAppliedBundle() error {
 // handleSkipVersion handles skipping a version.
 func (rt runtime) handleSkipVersion(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		httpx.MethodNotAllowed(w, r)
 		return
 	}
 
 	var req struct {
 		Version string `json:"version"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+	if !httpx.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -358,15 +368,14 @@ func (rt runtime) handleSkipVersion(w http.ResponseWriter, r *http.Request) {
 // handleAutoUpdateToggle handles toggling auto-update setting.
 func (rt runtime) handleAutoUpdateToggle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		httpx.MethodNotAllowed(w, r)
 		return
 	}
 
 	var req struct {
 		Enabled bool `json:"enabled"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+	if !httpx.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -391,7 +400,7 @@ func (rt runtime) handleUpdateHistory(w http.ResponseWriter, r *http.Request) {
 // handleRollback handles rolling back to a previous version.
 func (rt runtime) handleRollback(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		httpx.MethodNotAllowed(w, r)
 		return
 	}
 
@@ -443,9 +452,7 @@ func (rt runtime) handleRollback(w http.ResponseWriter, r *http.Request) {
 
 // writeJSON writes JSON response.
 func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	httpx.WriteJSON(w, status, v)
 }
 
 func versionTag(version string) string {

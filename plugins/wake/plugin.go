@@ -13,6 +13,7 @@ import (
 	"insylus/internal/api"
 	"insylus/internal/ctl"
 	"insylus/internal/finder"
+	"insylus/internal/httpx"
 	"insylus/internal/pluginhost"
 )
 
@@ -89,9 +90,7 @@ func (rt runtime) handleWebWake(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	httpx.WriteJSON(w, status, v)
 }
 
 func command() ctl.Command {

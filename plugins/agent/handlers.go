@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"insylus/internal/httpx"
 	"insylus/internal/pluginhost"
 	"insylus/internal/shared"
 )
@@ -257,22 +258,16 @@ func (rt runtime) authenticate(w http.ResponseWriter, r *http.Request) (string, 
 	return targetID, true
 }
 
-func methodNotAllowed(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+func methodNotAllowed(w http.ResponseWriter, r *http.Request) {
+	httpx.MethodNotAllowed(w, r)
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return false
-	}
-	return true
+	return httpx.DecodeJSON(w, r, dst)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	httpx.WriteJSON(w, status, v)
 }
 
 func randomToken(n int) string {
