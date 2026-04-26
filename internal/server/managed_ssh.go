@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"insylus/internal/shared"
 )
 
 type ManagedSSHSyncOptions struct {
@@ -24,6 +26,11 @@ func SyncManagedSSH(ctx context.Context, opts ManagedSSHSyncOptions) error {
 		return err
 	}
 	defer store.Close()
+
+	opts, err = resolveManagedSSHOptions(ctx, store, opts)
+	if err != nil {
+		return err
+	}
 
 	records, err := store.ListDevices(ctx)
 	if err != nil {
@@ -46,6 +53,37 @@ func SyncManagedSSH(ctx context.Context, opts ManagedSSHSyncOptions) error {
 		return err
 	}
 	return nil
+}
+
+func resolveManagedSSHOptions(ctx context.Context, store *Store, opts ManagedSSHSyncOptions) (ManagedSSHSyncOptions, error) {
+	previousSSHUser := strings.TrimSpace(opts.SSHUser)
+	cfg, err := store.ManagedAccountConfig(ctx, shared.ManagedAccountConfig{
+		ManagedUser: previousSSHUser,
+		AccessMode:  shared.AccessModeAudit,
+	})
+	if err != nil {
+		return opts, err
+	}
+	managedUser := strings.TrimSpace(cfg.ManagedUser)
+	if managedUser == "" {
+		managedUser = shared.DefaultManagedUser
+	}
+	opts.SSHUser = managedUser
+
+	identityFile := strings.TrimSpace(opts.IdentityFile)
+	if identityFile == "" || (previousSSHUser != "" && previousSSHUser != managedUser && identityFile == defaultManagedSSHIdentityFile(previousSSHUser)) {
+		identityFile = defaultManagedSSHIdentityFile(managedUser)
+	}
+	opts.IdentityFile = identityFile
+	return opts, nil
+}
+
+func defaultManagedSSHIdentityFile(user string) string {
+	user = strings.TrimSpace(user)
+	if user == "" {
+		user = shared.DefaultManagedUser
+	}
+	return "/home/" + user + "/.ssh/id_ed25519"
 }
 
 func renderManagedSSHConfig(records []DeviceRecord, sshUser, identityFile, knownHostsPath string) string {

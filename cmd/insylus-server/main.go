@@ -110,8 +110,8 @@ func runManagedSSHSync() {
 	fs := flag.NewFlagSet("sync-managed-ssh", flag.ExitOnError)
 	var opts server.ManagedSSHSyncOptions
 	fs.StringVar(&opts.DBPath, "db", "/var/lib/insylus/insylus.db", "sqlite database path")
-	fs.StringVar(&opts.SSHUser, "ssh-user", "insylus", "SSH user for managed aliases")
-	fs.StringVar(&opts.IdentityFile, "identity-file", "/home/insylus/.ssh/id_ed25519", "SSH private key used from the controller host")
+	fs.StringVar(&opts.SSHUser, "ssh-user", "", "fallback SSH user for managed aliases when no managed user is configured")
+	fs.StringVar(&opts.IdentityFile, "identity-file", "", "SSH private key used from the controller host; defaults to /home/<managed-user>/.ssh/id_ed25519")
 	fs.StringVar(&opts.ConfigPath, "config-path", "/etc/ssh/ssh_config.d/insylus.conf", "output SSH config path")
 	fs.StringVar(&opts.KnownHostsPath, "known-hosts-path", "/etc/ssh/ssh_known_hosts_insylus", "managed known hosts path")
 	if err := fs.Parse(os.Args[2:]); err != nil {

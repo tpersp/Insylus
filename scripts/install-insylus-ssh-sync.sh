@@ -3,14 +3,17 @@ set -euo pipefail
 
 BIN="${INSYLUS_SERVER_BIN:-${INSYLUS_BIN_DIR:-/opt/insylus/bin}/insylus-server}"
 DB="${INSYLUS_DB_PATH:-${INSYLUS_DATA_DIR:-/var/lib/insylus}/insylus.db}"
-SSH_USER="${INSYLUS_MANAGED_USER:-bob}"
-IDENTITY_FILE="${INSYLUS_SSH_IDENTITY_FILE:-/home/$SSH_USER/.ssh/id_ed25519}"
+IDENTITY_FILE="${INSYLUS_SSH_IDENTITY_FILE:-}"
 SYSTEMD_DIR="${INSYLUS_SYSTEMD_DIR:-/etc/systemd/system}"
 SERVER_SERVICE_NAME="${INSYLUS_SERVICE_NAME:-insylus.service}"
 SYNC_SERVICE_NAME="${INSYLUS_SSH_SYNC_SERVICE_NAME:-insylus-ssh-sync.service}"
 SYNC_TIMER_NAME="${INSYLUS_SSH_SYNC_TIMER_NAME:-insylus-ssh-sync.timer}"
 SERVICE_PATH="$SYSTEMD_DIR/$SYNC_SERVICE_NAME"
 TIMER_PATH="$SYSTEMD_DIR/$SYNC_TIMER_NAME"
+SYNC_COMMAND="$BIN sync-managed-ssh -db $DB"
+if [[ -n "$IDENTITY_FILE" ]]; then
+  SYNC_COMMAND="$SYNC_COMMAND -identity-file $IDENTITY_FILE"
+fi
 
 cat >"$SERVICE_PATH" <<EOF
 [Unit]
@@ -20,7 +23,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=$BIN sync-managed-ssh -db $DB -ssh-user $SSH_USER -identity-file $IDENTITY_FILE
+ExecStart=$SYNC_COMMAND
 EOF
 
 cat >"$TIMER_PATH" <<EOF
