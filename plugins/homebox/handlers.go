@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"insylus/internal/httpx"
@@ -105,9 +106,10 @@ func (rt runtime) handleSelf(w http.ResponseWriter, r *http.Request) {
 }
 
 func (rt runtime) handleItems(w http.ResponseWriter, r *http.Request) {
+	query := normalizedItemsQuery(r.URL.Query())
 	path := "/v1/items"
-	if r.URL.RawQuery != "" {
-		path += "?" + r.URL.RawQuery
+	if encoded := query.Encode(); encoded != "" {
+		path += "?" + encoded
 	}
 	var out any
 	if !rt.requestHomeBox(w, r, path, &out) {
@@ -123,7 +125,7 @@ func (rt runtime) handleItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var out any
-	if !rt.requestHomeBox(w, r, "/v1/items/"+id, &out) {
+	if !rt.requestHomeBoxAny(w, r, []string{"/v1/entities/" + url.PathEscape(id), "/v1/items/" + url.PathEscape(id)}, &out) {
 		return
 	}
 	rt.writeHomeBoxJSON(w, r, "item", out)
@@ -280,6 +282,33 @@ func statusForError(err error) int {
 
 func isHomeBoxNotFound(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "HomeBox API returned 404")
+}
+
+func normalizedItemsQuery(query url.Values) url.Values {
+	out := url.Values{}
+	assetID := ""
+	for key, values := range query {
+		if strings.EqualFold(key, "view") {
+			continue
+		}
+		if strings.EqualFold(key, "asset_id") || strings.EqualFold(key, "assetId") {
+			if len(values) > 0 {
+				assetID = strings.TrimSpace(values[0])
+			}
+			continue
+		}
+		for _, value := range values {
+			out.Add(key, value)
+		}
+	}
+	if assetID != "" {
+		if strings.HasPrefix(assetID, "#") {
+			out.Set("q", assetID)
+		} else {
+			out.Set("q", "#"+assetID)
+		}
+	}
+	return out
 }
 
 func wantsHTML(r *http.Request) bool {

@@ -261,7 +261,7 @@ insylusctl homebox set-config --base-url http://homebox:7745 --username you@exam
 insylusctl homebox remove-config [--json]
 insylusctl homebox test [--json]
 insylusctl homebox self [--json]
-insylusctl homebox items [--query router] [--page 1] [--page-size 25] [--compact|--info|--full] [--json]
+insylusctl homebox items [--query router|--asset-id 000-002] [--page 1] [--page-size 25] [--compact|--info|--full] [--json]
 insylusctl homebox item --id <homebox-item-id> [--compact|--info|--full] [--json]
 insylusctl homebox tags [--compact|--info|--full] [--json]
 insylusctl homebox locations [--compact|--info|--full] [--json]
@@ -277,6 +277,7 @@ POST /api/homebox/config/delete
 POST /api/homebox/test
 GET  /api/homebox/self?view=compact|info|full
 GET  /api/homebox/items?q=<query>&page=1&pageSize=25&view=compact|info|full
+GET  /api/homebox/items?asset_id=<asset-id>&page=1&pageSize=25&view=compact|info|full
 GET  /api/homebox/items/<item_id>?view=compact|info|full
 GET  /api/homebox/labels?view=compact|info|full
 GET  /api/homebox/locations?view=compact|info|full

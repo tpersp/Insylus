@@ -335,6 +335,7 @@ POST /api/homebox/config/delete
 POST /api/homebox/test
 GET  /api/homebox/self?view=compact|info|full
 GET  /api/homebox/items?q=<query>&pageSize=25&view=compact|info|full
+GET  /api/homebox/items?asset_id=<asset-id>&pageSize=25&view=compact|info|full
 GET  /api/homebox/items/<item_id>?view=compact|info|full
 GET  /api/homebox/labels?view=compact|info|full
 GET  /api/homebox/locations?view=compact|info|full
@@ -349,7 +350,7 @@ insylusctl homebox set-config --base-url URL --username USER [--password PASSWOR
 insylusctl homebox remove-config [--json]
 insylusctl homebox test [--json]
 insylusctl homebox self [--json]
-insylusctl homebox items [--query QUERY] [--page N] [--page-size N] [--compact|--info|--full] [--json]
+insylusctl homebox items [--query QUERY|--asset-id ASSET] [--page N] [--page-size N] [--compact|--info|--full] [--json]
 insylusctl homebox item --id ID [--compact|--info|--full] [--json]
 insylusctl homebox tags [--compact|--info|--full] [--json]
 insylusctl homebox locations [--compact|--info|--full] [--json]

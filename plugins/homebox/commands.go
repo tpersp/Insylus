@@ -159,15 +159,22 @@ func runItems(args []string) {
 	fs := newFlagSet("homebox items")
 	serverURL := fs.String("server", api.DefaultServerURL(), "Insylus server URL")
 	query := fs.String("query", "", "HomeBox item search query")
+	assetID := fs.String("asset-id", "", "HomeBox asset ID, for example 000-002")
 	page := fs.Int("page", 1, "HomeBox page number")
 	pageSize := fs.Int("page-size", 25, "HomeBox page size")
 	jsonOut := fs.Bool("json", false, "print JSON output")
 	views := addViewFlags(fs)
 	parseOrExit(fs, args)
+	if strings.TrimSpace(*query) != "" && strings.TrimSpace(*assetID) != "" {
+		api.Fatalf("use either --query or --asset-id, not both")
+	}
 
 	path := fmt.Sprintf("/api/homebox/items?page=%d&pageSize=%d&view=%s", *page, *pageSize, views.value())
 	if strings.TrimSpace(*query) != "" {
 		path += "&q=" + api.URLQueryEscape(strings.TrimSpace(*query))
+	}
+	if strings.TrimSpace(*assetID) != "" {
+		path += "&asset_id=" + api.URLQueryEscape(strings.TrimSpace(*assetID))
 	}
 	resp := mustGet(api.NewClient(*serverURL), path)
 	defer resp.Body.Close()
@@ -222,7 +229,7 @@ func PrintHelp(w io.Writer) {
 	fmt.Fprintf(w, "  %s homebox set-config --base-url URL --username USER [--password PASSWORD] [--json]\n", name)
 	fmt.Fprintf(w, "  %s homebox remove-config [--json]\n", name)
 	fmt.Fprintf(w, "  %s homebox test [--json]\n", name)
-	fmt.Fprintf(w, "  %s homebox items [--query QUERY] [--page N] [--page-size N] [--compact|--info|--full] [--json]\n", name)
+	fmt.Fprintf(w, "  %s homebox items [--query QUERY|--asset-id ASSET] [--page N] [--page-size N] [--compact|--info|--full] [--json]\n", name)
 	fmt.Fprintf(w, "  %s homebox item --id ID [--compact|--info|--full] [--json]\n", name)
 	fmt.Fprintf(w, "  %s homebox tags|locations|stats|self [--compact|--info|--full] [--json]\n\n", name)
 	fmt.Fprintf(w, "Flags:\n")
