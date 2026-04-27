@@ -212,6 +212,12 @@ func (rt runtime) requestHomeBoxAny(w http.ResponseWriter, r *http.Request, path
 	return false
 }
 
+func (rt runtime) writeHomeBoxError(w http.ResponseWriter, r *http.Request, err error) {
+	msg := classifyError(err)
+	_ = rt.store.markError(r.Context(), msg)
+	http.Error(w, msg, statusForError(err))
+}
+
 func (rt runtime) client(ctx context.Context) (*Client, error) {
 	cfg, err := rt.store.getConfig(ctx)
 	if err != nil {
@@ -223,6 +229,14 @@ func (rt runtime) client(ctx context.Context) (*Client, error) {
 	return NewClient(cfg, func(state authState) error {
 		return rt.store.updateAuthState(ctx, state)
 	})
+}
+
+func decodeJSONRequest(w http.ResponseWriter, r *http.Request, dst any) bool {
+	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+		http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
+		return false
+	}
+	return httpx.DecodeJSON(w, r, dst)
 }
 
 func configFromRequest(w http.ResponseWriter, r *http.Request) (configRequest, bool) {

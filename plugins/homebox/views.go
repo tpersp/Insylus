@@ -73,12 +73,12 @@ func shapeItem(row map[string]any, view homeBoxView) map[string]any {
 	out := map[string]any{
 		"name":     firstValue(row, "name", "Name"),
 		"asset_id": firstValue(row, "assetId", "asset_id", "AssetID"),
+		"location": nestedDisplay(row, "location", "Location"),
 		"id":       firstValue(row, "id", "ID"),
 	}
 	if view == homeBoxViewInfo {
 		out["description"] = firstValue(row, "description", "Description")
 		out["quantity"] = firstValue(row, "quantity", "Quantity")
-		out["location"] = nestedDisplay(row, "location", "Location")
 		out["tags"] = nestedListDisplay(row, "tags", "labels", "Tags", "Labels")
 		out["manufacturer"] = firstValue(row, "manufacturer", "Manufacturer")
 		out["model_number"] = firstValue(row, "modelNumber", "model_number", "ModelNumber")

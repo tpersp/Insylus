@@ -337,6 +337,9 @@ GET  /api/homebox/self?view=compact|info|full
 GET  /api/homebox/items?q=<query>&pageSize=25&view=compact|info|full
 GET  /api/homebox/items?asset_id=<asset-id>&pageSize=25&view=compact|info|full
 GET  /api/homebox/items/<item_id>?view=compact|info|full
+GET  /api/homebox/assets/template
+POST /api/homebox/assets?view=compact|info|full
+PATCH /api/homebox/assets/<item_id>?view=compact|info|full
 GET  /api/homebox/labels?view=compact|info|full
 GET  /api/homebox/locations?view=compact|info|full
 GET  /api/homebox/statistics?view=compact|info|full
@@ -352,6 +355,9 @@ insylusctl homebox test [--json]
 insylusctl homebox self [--json]
 insylusctl homebox items [--query QUERY|--asset-id ASSET] [--page N] [--page-size N] [--compact|--info|--full] [--json]
 insylusctl homebox item --id ID [--compact|--info|--full] [--json]
+insylusctl homebox asset-template [--json]
+insylusctl homebox create-asset --name NAME [--quantity N] [--asset-id ASSET] [--location-id ID] [--tag-ids IDS] [--json]
+insylusctl homebox update-asset --id ID [editable flags] [--compact|--info|--full] [--json]
 insylusctl homebox tags [--compact|--info|--full] [--json]
 insylusctl homebox locations [--compact|--info|--full] [--json]
 insylusctl homebox stats [--compact|--info|--full] [--json]
@@ -369,6 +375,10 @@ insylusctl homebox stats [--compact|--info|--full] [--json]
 - Clean connection errors are returned as `Cannot reach HomeBox`, `Invalid credentials`, `Unexpected API response`, or `Auth failed` where possible.
 - Item search proxies HomeBox `GET /v1/items`, preserving query parameters such as `q`, `page`, and `pageSize`.
 - HomeBox read endpoints default to `compact`; use `--info`/`view=info` for useful detail and `--full`/`view=full` for the raw upstream HomeBox payload.
+- Asset writes are non-destructive: agents may create assets and edit safe fields, but Insylus exposes no delete command or API route for HomeBox assets.
+- Use `insylusctl homebox asset-template --json` or `GET /api/homebox/assets/template` to inspect the full create/update field template.
+- `PATCH /api/homebox/assets/<item_id>` reads the current item, merges only supplied editable fields, and writes the merged item back so omitted fields are preserved.
+- Editable asset fields are `name`, `description`, `quantity`, `asset_id`, `location_id`, `clear_location`, `entity_type_id`, `tag_ids`, `manufacturer`, `model_number`, `serial_number`, `insured`, `lifetime_warranty`, `warranty_expires`, `warranty_details`, `purchase_date`, `purchase_from`, `purchase_price`, and `notes`.
 
 ## Proxmox plugin
 

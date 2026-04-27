@@ -263,6 +263,9 @@ insylusctl homebox test [--json]
 insylusctl homebox self [--json]
 insylusctl homebox items [--query router|--asset-id 000-002] [--page 1] [--page-size 25] [--compact|--info|--full] [--json]
 insylusctl homebox item --id <homebox-item-id> [--compact|--info|--full] [--json]
+insylusctl homebox asset-template [--json]
+insylusctl homebox create-asset --name "Asset name" [--quantity 1] [--asset-id 000-012] [--location-id <homebox-location-id>] [--json]
+insylusctl homebox update-asset --id <homebox-item-id> [editable flags] [--compact|--info|--full] [--json]
 insylusctl homebox tags [--compact|--info|--full] [--json]
 insylusctl homebox locations [--compact|--info|--full] [--json]
 insylusctl homebox stats [--compact|--info|--full] [--json]
@@ -279,12 +282,17 @@ GET  /api/homebox/self?view=compact|info|full
 GET  /api/homebox/items?q=<query>&page=1&pageSize=25&view=compact|info|full
 GET  /api/homebox/items?asset_id=<asset-id>&page=1&pageSize=25&view=compact|info|full
 GET  /api/homebox/items/<item_id>?view=compact|info|full
+GET  /api/homebox/assets/template
+POST /api/homebox/assets?view=compact|info|full
+PATCH /api/homebox/assets/<item_id>?view=compact|info|full
 GET  /api/homebox/labels?view=compact|info|full
 GET  /api/homebox/locations?view=compact|info|full
 GET  /api/homebox/statistics?view=compact|info|full
 ```
 
 The HomeBox plugin stores the HomeBox base URL, username/email, and password through the web UI at `/homebox`, through `insylusctl homebox set-config`, or through `POST /api/homebox/config`. The user enters the service base URL without `/api`; Insylus builds HomeBox API URLs internally, refreshes expiring HomeBox tokens, and retries once after `401` or `403`. HomeBox read endpoints default to `view=compact` for agent-friendly output; use `view=info` for a middle-detail summary and `view=full` for the raw upstream HomeBox payload. The Insylus `/api/homebox/labels` endpoint maps to current HomeBox tags and falls back to legacy labels for older HomeBox versions.
+
+HomeBox asset writes are intentionally non-destructive. Insylus exposes create and safe edit only; there is no delete endpoint or CLI command. `insylusctl homebox asset-template --json` and `GET /api/homebox/assets/template` return the full agent-facing field template. `PATCH /api/homebox/assets/<item_id>` accepts only supplied editable fields, reads the current HomeBox item, merges those fields, and writes the merged item back so omitted fields are preserved. Editable fields are `name`, `description`, `quantity`, `asset_id`, `location_id`, `clear_location`, `entity_type_id`, `tag_ids`, `manufacturer`, `model_number`, `serial_number`, `insured`, `lifetime_warranty`, `warranty_expires`, `warranty_details`, `purchase_date`, `purchase_from`, `purchase_price`, and `notes`.
 
 ## Discovery plugin
 
