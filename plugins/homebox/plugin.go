@@ -4,6 +4,7 @@ import (
 	"embed"
 	"io/fs"
 
+	"insylus/internal/ctl"
 	"insylus/internal/pluginhost"
 )
 
@@ -24,7 +25,23 @@ func (Plugin) Name() string {
 	return "HomeBox"
 }
 
+func (Plugin) Manifest() pluginhost.PluginManifest {
+	return pluginhost.PluginManifest{
+		ID:       "homebox",
+		Name:     "HomeBox",
+		Version:  "dev",
+		Provides: []string{"plugin.homebox", "homebox.inventory"},
+		CLI:      true,
+		Web:      true,
+		API:      true,
+	}
+}
+
 func (Plugin) Register(host pluginhost.Host) error {
+	if host.CLI().Enabled() {
+		host.CLI().AddCommand(command())
+		host.CLI().AddPlugin(ctl.PluginInfo{ID: "homebox", Name: "HomeBox"})
+	}
 	if host.Web().Enabled() {
 		templateFS, err := fs.Sub(files, ".")
 		if err != nil {

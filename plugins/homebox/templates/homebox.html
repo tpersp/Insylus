@@ -78,7 +78,7 @@
           <input type="number" id="homebox-page-size" min="1" max="100" value="25">
         </label>
         <button type="submit">Search</button>
-        <button type="button" class="button-secondary" id="homebox-labels">Labels</button>
+        <button type="button" class="button-secondary" id="homebox-labels">Tags</button>
         <button type="button" class="button-secondary" id="homebox-locations">Locations</button>
         <button type="button" class="button-secondary" id="homebox-stats">Stats</button>
       </form>
@@ -103,7 +103,7 @@
         event.preventDefault();
         loadItems();
       });
-      document.getElementById('homebox-labels').addEventListener('click', function() { loadSimple('/api/homebox/labels', 'Labels'); });
+      document.getElementById('homebox-labels').addEventListener('click', function() { loadSimple('/api/homebox/labels', 'Tags'); });
       document.getElementById('homebox-locations').addEventListener('click', function() { loadSimple('/api/homebox/locations', 'Locations'); });
       document.getElementById('homebox-stats').addEventListener('click', function() { loadSimple('/api/homebox/statistics', 'Statistics'); });
       if (testBtn) testBtn.addEventListener('click', testConnection);

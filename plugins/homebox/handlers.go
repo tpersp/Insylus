@@ -131,7 +131,7 @@ func (rt runtime) handleItem(w http.ResponseWriter, r *http.Request) {
 
 func (rt runtime) handleLabels(w http.ResponseWriter, r *http.Request) {
 	var out any
-	if !rt.requestHomeBox(w, r, "/v1/labels", &out) {
+	if !rt.requestHomeBoxAny(w, r, []string{"/v1/tags", "/v1/labels"}, &out) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
@@ -139,7 +139,7 @@ func (rt runtime) handleLabels(w http.ResponseWriter, r *http.Request) {
 
 func (rt runtime) handleLocations(w http.ResponseWriter, r *http.Request) {
 	var out any
-	if !rt.requestHomeBox(w, r, "/v1/locations", &out) {
+	if !rt.requestHomeBoxAny(w, r, []string{"/v1/entities?isLocation=true&pageSize=1000", "/v1/locations"}, &out) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
@@ -171,19 +171,35 @@ func (rt runtime) testConnection(ctx context.Context) (connectionTestResult, err
 }
 
 func (rt runtime) requestHomeBox(w http.ResponseWriter, r *http.Request, path string, out any) bool {
+	return rt.requestHomeBoxAny(w, r, []string{path}, out)
+}
+
+func (rt runtime) requestHomeBoxAny(w http.ResponseWriter, r *http.Request, paths []string, out any) bool {
 	client, err := rt.client(r.Context())
 	if err != nil {
 		http.Error(w, classifyError(err), http.StatusBadRequest)
 		return false
 	}
-	if err := client.GetJSON(r.Context(), path, out); err != nil {
-		msg := classifyError(err)
+	var lastErr error
+	for _, path := range paths {
+		err := client.GetJSON(r.Context(), path, out)
+		if err == nil {
+			_ = rt.store.markConnected(r.Context())
+			return true
+		}
+		lastErr = err
+		if !isHomeBoxNotFound(err) {
+			break
+		}
+	}
+	if lastErr != nil {
+		msg := classifyError(lastErr)
 		_ = rt.store.markError(r.Context(), msg)
-		http.Error(w, msg, statusForError(err))
+		http.Error(w, msg, statusForError(lastErr))
 		return false
 	}
-	_ = rt.store.markConnected(r.Context())
-	return true
+	http.Error(w, "HomeBox API path is required", http.StatusInternalServerError)
+	return false
 }
 
 func (rt runtime) client(ctx context.Context) (*Client, error) {
@@ -252,6 +268,10 @@ func statusForError(err error) int {
 	default:
 		return http.StatusBadGateway
 	}
+}
+
+func isHomeBoxNotFound(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "HomeBox API returned 404")
 }
 
 func wantsHTML(r *http.Request) bool {

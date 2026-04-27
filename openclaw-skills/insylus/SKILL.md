@@ -341,6 +341,23 @@ GET  /api/homebox/locations
 GET  /api/homebox/statistics
 ```
 
+### CLI commands
+
+```bash
+insylusctl homebox config [--json]
+insylusctl homebox set-config --base-url URL --username USER [--password PASSWORD] [--json]
+insylusctl homebox remove-config [--json]
+insylusctl homebox test [--json]
+insylusctl homebox self [--json]
+insylusctl homebox items [--query QUERY] [--page N] [--page-size N] [--json]
+insylusctl homebox item --id ID [--json]
+insylusctl homebox tags [--json]
+insylusctl homebox locations [--json]
+insylusctl homebox stats [--json]
+```
+
+`set-config` also accepts the password through `HOMEBOX_PASSWORD`.
+
 ### Web UI
 
 - `/homebox` — configure HomeBox credentials, test the connection, and browse inventory/search metadata.
