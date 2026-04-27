@@ -333,12 +333,12 @@ GET  /api/homebox/config
 POST /api/homebox/config
 POST /api/homebox/config/delete
 POST /api/homebox/test
-GET  /api/homebox/self
-GET  /api/homebox/items?q=<query>&pageSize=25
-GET  /api/homebox/items/<item_id>
-GET  /api/homebox/labels
-GET  /api/homebox/locations
-GET  /api/homebox/statistics
+GET  /api/homebox/self?view=compact|info|full
+GET  /api/homebox/items?q=<query>&pageSize=25&view=compact|info|full
+GET  /api/homebox/items/<item_id>?view=compact|info|full
+GET  /api/homebox/labels?view=compact|info|full
+GET  /api/homebox/locations?view=compact|info|full
+GET  /api/homebox/statistics?view=compact|info|full
 ```
 
 ### CLI commands
@@ -349,11 +349,11 @@ insylusctl homebox set-config --base-url URL --username USER [--password PASSWOR
 insylusctl homebox remove-config [--json]
 insylusctl homebox test [--json]
 insylusctl homebox self [--json]
-insylusctl homebox items [--query QUERY] [--page N] [--page-size N] [--json]
-insylusctl homebox item --id ID [--json]
-insylusctl homebox tags [--json]
-insylusctl homebox locations [--json]
-insylusctl homebox stats [--json]
+insylusctl homebox items [--query QUERY] [--page N] [--page-size N] [--compact|--info|--full] [--json]
+insylusctl homebox item --id ID [--compact|--info|--full] [--json]
+insylusctl homebox tags [--compact|--info|--full] [--json]
+insylusctl homebox locations [--compact|--info|--full] [--json]
+insylusctl homebox stats [--compact|--info|--full] [--json]
 ```
 
 `set-config` also accepts the password through `HOMEBOX_PASSWORD`.
@@ -367,6 +367,7 @@ insylusctl homebox stats [--json]
 - `POST /api/homebox/config` stores the config and immediately tests `GET /v1/users/self` against HomeBox.
 - Clean connection errors are returned as `Cannot reach HomeBox`, `Invalid credentials`, `Unexpected API response`, or `Auth failed` where possible.
 - Item search proxies HomeBox `GET /v1/items`, preserving query parameters such as `q`, `page`, and `pageSize`.
+- HomeBox read endpoints default to `compact`; use `--info`/`view=info` for useful detail and `--full`/`view=full` for the raw upstream HomeBox payload.
 
 ## Proxmox plugin
 

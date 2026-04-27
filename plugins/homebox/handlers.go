@@ -101,7 +101,7 @@ func (rt runtime) handleSelf(w http.ResponseWriter, r *http.Request) {
 	if !rt.requestHomeBox(w, r, "/v1/users/self", &out) {
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, out)
+	rt.writeHomeBoxJSON(w, r, "self", out)
 }
 
 func (rt runtime) handleItems(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +113,7 @@ func (rt runtime) handleItems(w http.ResponseWriter, r *http.Request) {
 	if !rt.requestHomeBox(w, r, path, &out) {
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, out)
+	rt.writeHomeBoxJSON(w, r, "items", out)
 }
 
 func (rt runtime) handleItem(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +126,7 @@ func (rt runtime) handleItem(w http.ResponseWriter, r *http.Request) {
 	if !rt.requestHomeBox(w, r, "/v1/items/"+id, &out) {
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, out)
+	rt.writeHomeBoxJSON(w, r, "item", out)
 }
 
 func (rt runtime) handleLabels(w http.ResponseWriter, r *http.Request) {
@@ -134,7 +134,7 @@ func (rt runtime) handleLabels(w http.ResponseWriter, r *http.Request) {
 	if !rt.requestHomeBoxAny(w, r, []string{"/v1/tags", "/v1/labels"}, &out) {
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, out)
+	rt.writeHomeBoxJSON(w, r, "tags", out)
 }
 
 func (rt runtime) handleLocations(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +142,7 @@ func (rt runtime) handleLocations(w http.ResponseWriter, r *http.Request) {
 	if !rt.requestHomeBoxAny(w, r, []string{"/v1/entities?isLocation=true&pageSize=1000", "/v1/locations"}, &out) {
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, out)
+	rt.writeHomeBoxJSON(w, r, "locations", out)
 }
 
 func (rt runtime) handleStatistics(w http.ResponseWriter, r *http.Request) {
@@ -150,7 +150,15 @@ func (rt runtime) handleStatistics(w http.ResponseWriter, r *http.Request) {
 	if !rt.requestHomeBox(w, r, "/v1/groups/statistics", &out) {
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, out)
+	rt.writeHomeBoxJSON(w, r, "statistics", out)
+}
+
+func (rt runtime) writeHomeBoxJSON(w http.ResponseWriter, r *http.Request, kind string, payload any) {
+	view, ok := parseHomeBoxView(w, r)
+	if !ok {
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, shapeHomeBoxPayload(kind, view, payload))
 }
 
 func (rt runtime) testConnection(ctx context.Context) (connectionTestResult, error) {

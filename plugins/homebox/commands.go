@@ -162,9 +162,10 @@ func runItems(args []string) {
 	page := fs.Int("page", 1, "HomeBox page number")
 	pageSize := fs.Int("page-size", 25, "HomeBox page size")
 	jsonOut := fs.Bool("json", false, "print JSON output")
+	views := addViewFlags(fs)
 	parseOrExit(fs, args)
 
-	path := fmt.Sprintf("/api/homebox/items?page=%d&pageSize=%d", *page, *pageSize)
+	path := fmt.Sprintf("/api/homebox/items?page=%d&pageSize=%d&view=%s", *page, *pageSize, views.value())
 	if strings.TrimSpace(*query) != "" {
 		path += "&q=" + api.URLQueryEscape(strings.TrimSpace(*query))
 	}
@@ -184,11 +185,12 @@ func runItem(args []string) {
 	serverURL := fs.String("server", api.DefaultServerURL(), "Insylus server URL")
 	id := fs.String("id", "", "HomeBox item/entity ID")
 	jsonOut := fs.Bool("json", false, "print JSON output")
+	views := addViewFlags(fs)
 	parseOrExit(fs, args)
 	if strings.TrimSpace(*id) == "" {
 		api.Fatalf("--id is required")
 	}
-	resp := mustGet(api.NewClient(*serverURL), "/api/homebox/items/"+api.URLQueryEscape(*id))
+	resp := mustGet(api.NewClient(*serverURL), "/api/homebox/items/"+api.URLQueryEscape(*id)+"?view="+views.value())
 	defer resp.Body.Close()
 	if *jsonOut {
 		api.PrintRawJSON(resp.Body)
@@ -201,8 +203,9 @@ func runGET(args []string, path, title string) {
 	fs := newFlagSet("homebox")
 	serverURL := fs.String("server", api.DefaultServerURL(), "Insylus server URL")
 	jsonOut := fs.Bool("json", false, "print JSON output")
+	views := addViewFlags(fs)
 	parseOrExit(fs, args)
-	resp := mustGet(api.NewClient(*serverURL), path)
+	resp := mustGet(api.NewClient(*serverURL), appendView(path, views.value()))
 	defer resp.Body.Close()
 	if *jsonOut {
 		api.PrintRawJSON(resp.Body)
@@ -219,13 +222,55 @@ func PrintHelp(w io.Writer) {
 	fmt.Fprintf(w, "  %s homebox set-config --base-url URL --username USER [--password PASSWORD] [--json]\n", name)
 	fmt.Fprintf(w, "  %s homebox remove-config [--json]\n", name)
 	fmt.Fprintf(w, "  %s homebox test [--json]\n", name)
-	fmt.Fprintf(w, "  %s homebox items [--query QUERY] [--page N] [--page-size N] [--json]\n", name)
-	fmt.Fprintf(w, "  %s homebox item --id ID [--json]\n", name)
-	fmt.Fprintf(w, "  %s homebox tags|locations|stats|self [--json]\n\n", name)
+	fmt.Fprintf(w, "  %s homebox items [--query QUERY] [--page N] [--page-size N] [--compact|--info|--full] [--json]\n", name)
+	fmt.Fprintf(w, "  %s homebox item --id ID [--compact|--info|--full] [--json]\n", name)
+	fmt.Fprintf(w, "  %s homebox tags|locations|stats|self [--compact|--info|--full] [--json]\n\n", name)
 	fmt.Fprintf(w, "Flags:\n")
 	fmt.Fprintf(w, "  --server        Insylus server URL, default INSYLUS_SERVER_URL or http://127.0.0.1:8080\n")
 	fmt.Fprintf(w, "  --json          Print JSON output\n")
+	fmt.Fprintf(w, "  --compact       Compact output view for agent scans (default)\n")
+	fmt.Fprintf(w, "  --info          Middle-detail output view\n")
+	fmt.Fprintf(w, "  --full          Full upstream HomeBox payload\n")
 	fmt.Fprintf(w, "  --password      HomeBox password; may also be supplied as HOMEBOX_PASSWORD\n")
+}
+
+type viewFlags struct {
+	compact *bool
+	info    *bool
+	full    *bool
+	ful     *bool
+}
+
+func addViewFlags(fs *flag.FlagSet) viewFlags {
+	return viewFlags{
+		compact: fs.Bool("compact", false, "compact output view"),
+		info:    fs.Bool("info", false, "info output view"),
+		full:    fs.Bool("full", false, "full output view"),
+		ful:     fs.Bool("ful", false, "alias for --full"),
+	}
+}
+
+func (v viewFlags) value() string {
+	count := boolCount(*v.compact, *v.info, *v.full, *v.ful)
+	if count > 1 {
+		api.Fatalf("choose only one of --compact, --info, or --full")
+	}
+	switch {
+	case *v.info:
+		return "info"
+	case *v.full || *v.ful:
+		return "full"
+	default:
+		return "compact"
+	}
+}
+
+func appendView(path, view string) string {
+	sep := "?"
+	if strings.Contains(path, "?") {
+		sep = "&"
+	}
+	return path + sep + "view=" + view
 }
 
 func newFlagSet(name string) *flag.FlagSet {
@@ -254,6 +299,16 @@ func helpSet(fs *flag.FlagSet) bool {
 		}
 	}
 	return false
+}
+
+func boolCount(values ...bool) int {
+	n := 0
+	for _, value := range values {
+		if value {
+			n++
+		}
+	}
+	return n
 }
 
 func mustGet(client api.Client, path string) *http.Response {

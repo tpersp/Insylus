@@ -261,11 +261,11 @@ insylusctl homebox set-config --base-url http://homebox:7745 --username you@exam
 insylusctl homebox remove-config [--json]
 insylusctl homebox test [--json]
 insylusctl homebox self [--json]
-insylusctl homebox items [--query router] [--page 1] [--page-size 25] [--json]
-insylusctl homebox item --id <homebox-item-id> [--json]
-insylusctl homebox tags [--json]
-insylusctl homebox locations [--json]
-insylusctl homebox stats [--json]
+insylusctl homebox items [--query router] [--page 1] [--page-size 25] [--compact|--info|--full] [--json]
+insylusctl homebox item --id <homebox-item-id> [--compact|--info|--full] [--json]
+insylusctl homebox tags [--compact|--info|--full] [--json]
+insylusctl homebox locations [--compact|--info|--full] [--json]
+insylusctl homebox stats [--compact|--info|--full] [--json]
 ```
 
 HomeBox API through Insylus:
@@ -275,15 +275,15 @@ GET  /api/homebox/config
 POST /api/homebox/config
 POST /api/homebox/config/delete
 POST /api/homebox/test
-GET  /api/homebox/self
-GET  /api/homebox/items?q=<query>&page=1&pageSize=25
-GET  /api/homebox/items/<item_id>
-GET  /api/homebox/labels
-GET  /api/homebox/locations
-GET  /api/homebox/statistics
+GET  /api/homebox/self?view=compact|info|full
+GET  /api/homebox/items?q=<query>&page=1&pageSize=25&view=compact|info|full
+GET  /api/homebox/items/<item_id>?view=compact|info|full
+GET  /api/homebox/labels?view=compact|info|full
+GET  /api/homebox/locations?view=compact|info|full
+GET  /api/homebox/statistics?view=compact|info|full
 ```
 
-The HomeBox plugin stores the HomeBox base URL, username/email, and password through the web UI at `/homebox`, through `insylusctl homebox set-config`, or through `POST /api/homebox/config`. The user enters the service base URL without `/api`; Insylus builds HomeBox API URLs internally, refreshes expiring HomeBox tokens, and retries once after `401` or `403`. The Insylus `/api/homebox/labels` endpoint maps to current HomeBox tags and falls back to legacy labels for older HomeBox versions.
+The HomeBox plugin stores the HomeBox base URL, username/email, and password through the web UI at `/homebox`, through `insylusctl homebox set-config`, or through `POST /api/homebox/config`. The user enters the service base URL without `/api`; Insylus builds HomeBox API URLs internally, refreshes expiring HomeBox tokens, and retries once after `401` or `403`. HomeBox read endpoints default to `view=compact` for agent-friendly output; use `view=info` for a middle-detail summary and `view=full` for the raw upstream HomeBox payload. The Insylus `/api/homebox/labels` endpoint maps to current HomeBox tags and falls back to legacy labels for older HomeBox versions.
 
 ## Discovery plugin
 
