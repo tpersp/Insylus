@@ -11,6 +11,7 @@ import (
 	"insylus/plugins/discovery"
 	"insylus/plugins/docker"
 	"insylus/plugins/help"
+	"insylus/plugins/homebox"
 	"insylus/plugins/jellyfin"
 	"insylus/plugins/monitor"
 	"insylus/plugins/proxmox"
@@ -29,6 +30,7 @@ func Plugins() []pluginhost.Plugin {
 		discovery.New(),
 		docker.New(),
 		help.New(),
+		homebox.New(),
 		jellyfin.New(),
 		monitor.New(),
 		proxmox.New(),

@@ -159,9 +159,9 @@ func pluginProfiles() []pluginhost.PluginProfile {
 		{Name: "agent-inventory", Description: "Devices and agent inventory", PluginIDs: []string{"dashboard", "help", "devices", "agent"}},
 		{Name: "docker", Description: "Docker control only", PluginIDs: []string{"dashboard", "help", "docker"}},
 		{Name: "proxmox", Description: "Proxmox control only", PluginIDs: []string{"dashboard", "help", "proxmox"}},
-		{Name: "media", Description: "Jellyfin media only", PluginIDs: []string{"dashboard", "help", "jellyfin"}},
-		{Name: "homelab", Description: "Inventory, discovery, monitoring, agent, services, topology, wake, Docker, Proxmox, Jellyfin, and Update", PluginIDs: []string{"dashboard", "help", "devices", "discovery", "monitor", "agent", "services", "topology", "wake", "docker", "proxmox", "jellyfin", "update"}},
-		{Name: "managed-homelab", Description: "Homelab profile plus discovery, monitoring, and managed access", PluginIDs: []string{"dashboard", "help", "devices", "discovery", "monitor", "agent", "services", "topology", "wake", "docker", "proxmox", "jellyfin", "access", "update"}},
+		{Name: "media", Description: "Jellyfin media and HomeBox inventory", PluginIDs: []string{"dashboard", "help", "jellyfin", "homebox"}},
+		{Name: "homelab", Description: "Inventory, discovery, monitoring, agent, services, topology, wake, Docker, Proxmox, Jellyfin, HomeBox, and Update", PluginIDs: []string{"dashboard", "help", "devices", "discovery", "monitor", "agent", "services", "topology", "wake", "docker", "proxmox", "jellyfin", "homebox", "update"}},
+		{Name: "managed-homelab", Description: "Homelab profile plus discovery, monitoring, and managed access", PluginIDs: []string{"dashboard", "help", "devices", "discovery", "monitor", "agent", "services", "topology", "wake", "docker", "proxmox", "jellyfin", "homebox", "access", "update"}},
 	}
 }
 

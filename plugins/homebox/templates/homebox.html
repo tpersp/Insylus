@@ -1,0 +1,212 @@
+{{ define "homebox.html" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HomeBox</title>
+  {{ template "head-assets" . }}
+</head>
+<body>
+  {{ template "header" . }}
+  <main class="page">
+    <section class="grid">
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Connection</p>
+            <h2>HomeBox</h2>
+          </div>
+        </div>
+        <p>Connect Insylus to a HomeBox inventory server with the same username or email and password used in the HomeBox web app.</p>
+        <div>
+          {{ if .Config.Configured }}
+            <span class="pill {{ if .Config.Connected }}pill-ok{{ else }}pill-warn{{ end }}">{{ if .Config.Connected }}connected{{ else }}needs attention{{ end }}</span>
+            <p class="subtle">{{ .Config.BaseURL }} as {{ .Config.Username }}</p>
+            {{ if .Config.LastError }}<p class="muted">{{ .Config.LastError }}</p>{{ end }}
+          {{ else }}
+            <span class="pill pill-muted">not configured</span>
+          {{ end }}
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Settings</p>
+            <h2>Store Credentials</h2>
+          </div>
+        </div>
+        <form method="post" action="/homebox/config" class="settings-form">
+          <label>Base URL
+            <input type="url" name="base_url" placeholder="http://host:7745" value="{{ .Config.BaseURL }}" required>
+            <span class="subtle">Do not include <code>/api</code>. Trailing slashes are removed automatically.</span>
+          </label>
+          <label>Username or email
+            <input type="text" name="username" autocomplete="username" value="{{ .Config.Username }}" required>
+          </label>
+          <label>Password
+            <input type="password" name="password" autocomplete="current-password" {{ if not .Config.Configured }}required{{ end }}>
+            {{ if .Config.Configured }}<span class="subtle">Leave blank to keep the stored password.</span>{{ end }}
+          </label>
+          <button type="submit">Save and test</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Inventory</p>
+          <h2>HomeBox Browser</h2>
+        </div>
+        <div>
+          {{ if .Config.Configured }}
+          <button type="button" class="button-secondary compact-button" id="homebox-test">Test</button>
+          <form method="post" action="/homebox/config/delete" class="inline-form">
+            <button type="submit" class="button-secondary compact-button">Remove</button>
+          </form>
+          {{ end }}
+        </div>
+      </div>
+      {{ if .Config.Configured }}
+      <form class="quick-add" id="homebox-search-form">
+        <label>Search
+          <input type="search" id="homebox-query" placeholder="item name, asset id, label">
+        </label>
+        <label>Page size
+          <input type="number" id="homebox-page-size" min="1" max="100" value="25">
+        </label>
+        <button type="submit">Search</button>
+        <button type="button" class="button-secondary" id="homebox-labels">Labels</button>
+        <button type="button" class="button-secondary" id="homebox-locations">Locations</button>
+        <button type="button" class="button-secondary" id="homebox-stats">Stats</button>
+      </form>
+      <div id="homebox-status" class="muted">Search HomeBox inventory or load metadata.</div>
+      <div id="homebox-output"></div>
+      {{ else }}
+      <p class="muted">Add HomeBox credentials to browse inventory.</p>
+      {{ end }}
+    </section>
+  </main>
+  {{ if .Config.Configured }}
+  <script>
+    (function() {
+      const statusEl = document.getElementById('homebox-status');
+      const outputEl = document.getElementById('homebox-output');
+      const form = document.getElementById('homebox-search-form');
+      const query = document.getElementById('homebox-query');
+      const pageSize = document.getElementById('homebox-page-size');
+      const testBtn = document.getElementById('homebox-test');
+
+      form.addEventListener('submit', function(event) {
+        event.preventDefault();
+        loadItems();
+      });
+      document.getElementById('homebox-labels').addEventListener('click', function() { loadSimple('/api/homebox/labels', 'Labels'); });
+      document.getElementById('homebox-locations').addEventListener('click', function() { loadSimple('/api/homebox/locations', 'Locations'); });
+      document.getElementById('homebox-stats').addEventListener('click', function() { loadSimple('/api/homebox/statistics', 'Statistics'); });
+      if (testBtn) testBtn.addEventListener('click', testConnection);
+
+      async function testConnection() {
+        setStatus('Testing HomeBox...');
+        try {
+          const data = await fetchJSON('/api/homebox/test', { method: 'POST' });
+          setStatus(data.status === 'connected' ? 'Connected' : (data.message || 'Connection failed'));
+        } catch (err) {
+          setError(err);
+        }
+      }
+
+      async function loadItems() {
+        setStatus('Loading items...');
+        const params = new URLSearchParams();
+        if (query.value.trim()) params.set('q', query.value.trim());
+        params.set('pageSize', pageSize.value || '25');
+        try {
+          const data = await fetchJSON('/api/homebox/items?' + params.toString());
+          renderItems(data);
+          setStatus('Items loaded');
+        } catch (err) {
+          setError(err);
+        }
+      }
+
+      async function loadSimple(url, title) {
+        setStatus('Loading ' + title.toLowerCase() + '...');
+        try {
+          const data = await fetchJSON(url);
+          renderJSON(title, data);
+          setStatus(title + ' loaded');
+        } catch (err) {
+          setError(err);
+        }
+      }
+
+      function renderItems(data) {
+        const rows = extractRows(data);
+        if (!rows.length) {
+          outputEl.innerHTML = '<p class="muted">No items returned.</p>';
+          return;
+        }
+        outputEl.innerHTML = '<div class="table-wrap"><table class="device-table"><thead><tr><th>Name</th><th>Asset ID</th><th>Location</th><th>Labels</th><th>ID</th></tr></thead><tbody>' +
+          rows.map(item => '<tr><td><strong>' + escapeHTML(item.name || item.Name || '-') + '</strong></td><td>' + escapeHTML(item.assetId || item.asset_id || item.AssetID || '-') + '</td><td>' + escapeHTML(locationName(item)) + '</td><td>' + escapeHTML(labelNames(item)) + '</td><td><code>' + escapeHTML(item.id || item.ID || '') + '</code></td></tr>').join('') +
+          '</tbody></table></div>';
+      }
+
+      function renderJSON(title, data) {
+        outputEl.innerHTML = '<h3>' + escapeHTML(title) + '</h3><pre class="json-block">' + escapeHTML(JSON.stringify(data, null, 2)) + '</pre>';
+      }
+
+      function extractRows(data) {
+        if (Array.isArray(data)) return data;
+        if (!data || typeof data !== 'object') return [];
+        if (Array.isArray(data.items)) return data.items;
+        if (Array.isArray(data.Items)) return data.Items;
+        if (Array.isArray(data.results)) return data.results;
+        if (Array.isArray(data.data)) return data.data;
+        if (data.data && Array.isArray(data.data.items)) return data.data.items;
+        return [];
+      }
+
+      function locationName(item) {
+        const loc = item.location || item.Location;
+        if (!loc) return '-';
+        if (typeof loc === 'string') return loc;
+        return loc.name || loc.Name || '-';
+      }
+
+      function labelNames(item) {
+        const labels = item.labels || item.Labels || [];
+        if (!Array.isArray(labels) || !labels.length) return '-';
+        return labels.map(label => typeof label === 'string' ? label : (label.name || label.Name || '')).filter(Boolean).join(', ');
+      }
+
+      async function fetchJSON(url, options) {
+        const resp = await fetch(url, options || {});
+        const text = await resp.text();
+        if (!resp.ok) throw new Error(text || resp.statusText);
+        return text ? JSON.parse(text) : null;
+      }
+
+      function setStatus(text) {
+        statusEl.textContent = text;
+        statusEl.className = 'muted';
+      }
+
+      function setError(err) {
+        statusEl.textContent = err.message || String(err);
+        statusEl.className = 'muted error';
+      }
+
+      function escapeHTML(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function(ch) {
+          return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+        });
+      }
+    })();
+  </script>
+  {{ end }}
+</body>
+</html>
+{{ end }}

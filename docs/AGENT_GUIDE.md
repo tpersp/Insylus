@@ -12,13 +12,13 @@ It describes:
 
 ## Purpose
 
-Insylus is a runtime-configurable plugin control plane. Core Insylus owns plugin settings and neutral targets; enabled plugins add inventory, discovery, monitoring, agent, access, Docker, Proxmox, Jellyfin, services, topology, and wake behavior.
+Insylus is a runtime-configurable plugin control plane. Core Insylus owns plugin settings and neutral targets; enabled plugins add inventory, discovery, monitoring, agent, access, Docker, Proxmox, Jellyfin, HomeBox, services, topology, and wake behavior.
 
 On the controller host, it provides:
 
 - `/api/plugins` and `insylusctl plugins` for runtime plugin selection
 - `/api/targets` for neutral target lookup
-- optional plugin surfaces such as Devices, Discovery, Monitor, Agent, Access, Docker, Proxmox, Jellyfin, Services, Topology, and Wake
+- optional plugin surfaces such as Devices, Discovery, Monitor, Agent, Access, Docker, Proxmox, Jellyfin, HomeBox, Services, Topology, and Wake
 
 Disabling a plugin gates its web routes, API routes, navigation items, and plugin static assets immediately; they return `404` or disappear from navigation without waiting for a restart. Enabling a compiled plugin also makes its surfaces available immediately.
 
@@ -252,6 +252,19 @@ Read discovery candidates:
 ```bash
 curl http://127.0.0.1:8080/api/discovery
 ```
+
+HomeBox integration:
+
+```bash
+curl http://127.0.0.1:8080/api/homebox/config
+curl -X POST http://127.0.0.1:8080/api/homebox/test
+curl "http://127.0.0.1:8080/api/homebox/items?q=router&pageSize=25"
+curl http://127.0.0.1:8080/api/homebox/labels
+curl http://127.0.0.1:8080/api/homebox/locations
+curl http://127.0.0.1:8080/api/homebox/statistics
+```
+
+The HomeBox plugin stores the HomeBox base URL, username/email, and password through the web UI at `/homebox`. The user enters the service base URL without `/api`; Insylus builds HomeBox API URLs internally, refreshes expiring HomeBox tokens, and retries once after `401` or `403`.
 
 ## Discovery plugin
 

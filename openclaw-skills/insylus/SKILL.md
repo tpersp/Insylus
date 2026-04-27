@@ -314,6 +314,43 @@ GET  /api/jellyfin/<device_id>/items/<item_id>
 - Progress percentage is calculated from playback position vs. total runtime.
 - User data (watched status, resume points) is always sourced from the configured default user ID.
 
+## HomeBox plugin
+
+HomeBox is a home inventory system. Insylus connects with a HomeBox base URL plus username/email and password, then refreshes HomeBox bearer tokens automatically.
+
+### Rules
+
+- Enter the HomeBox base URL without `/api`, for example `http://host:7745` or `https://homebox.example.test`.
+- The plugin trims whitespace and trailing slashes, then calls HomeBox under `<base_url>/api`.
+- Passwords and HomeBox tokens are encrypted with the plugin secret store.
+- The plugin refreshes tokens before expiry and retries once after a HomeBox `401` or `403`.
+- Do not log or expose the HomeBox password, bearer token, or attachment token.
+
+### API endpoints
+
+```bash
+GET  /api/homebox/config
+POST /api/homebox/config
+POST /api/homebox/config/delete
+POST /api/homebox/test
+GET  /api/homebox/self
+GET  /api/homebox/items?q=<query>&pageSize=25
+GET  /api/homebox/items/<item_id>
+GET  /api/homebox/labels
+GET  /api/homebox/locations
+GET  /api/homebox/statistics
+```
+
+### Web UI
+
+- `/homebox` — configure HomeBox credentials, test the connection, and browse inventory/search metadata.
+
+### Interpretation
+
+- `POST /api/homebox/config` stores the config and immediately tests `GET /v1/users/self` against HomeBox.
+- Clean connection errors are returned as `Cannot reach HomeBox`, `Invalid credentials`, `Unexpected API response`, or `Auth failed` where possible.
+- Item search proxies HomeBox `GET /v1/items`, preserving query parameters such as `q`, `page`, and `pageSize`.
+
 ## Proxmox plugin
 
 Proxmox VE is a virtualization platform. Insylus queries it through user-provided API tokens to list VMs, LXCs, node status, and manage power state.
