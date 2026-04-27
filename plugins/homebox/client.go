@@ -101,7 +101,7 @@ func (c *Client) Login(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("Unexpected API response: invalid expiresAt")
 	}
-	c.token = login.Token
+	c.token = normalizeAuthToken(login.Token)
 	c.attachmentToken = login.AttachmentToken
 	c.expiresAt = expiresAt
 	if c.onAuth != nil {
@@ -183,7 +183,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body any) ([]b
 		return nil, 0, err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Authorization", authorizationHeader(c.token))
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -197,6 +197,25 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body any) ([]b
 		return nil, 0, err
 	}
 	return data, resp.StatusCode, nil
+}
+
+func normalizeAuthToken(token string) string {
+	token = strings.TrimSpace(token)
+	if len(token) >= 7 && strings.EqualFold(token[:7], "Bearer ") {
+		return strings.TrimSpace(token[7:])
+	}
+	return token
+}
+
+func authorizationHeader(token string) string {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return ""
+	}
+	if len(token) >= 7 && strings.EqualFold(token[:7], "Bearer ") {
+		return token
+	}
+	return "Bearer " + token
 }
 
 func parseHomeBoxTime(value string) (*time.Time, error) {

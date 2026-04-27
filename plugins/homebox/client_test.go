@@ -36,7 +36,7 @@ func TestClientRefreshesTokenBeforeRequest(t *testing.T) {
 			}
 			expires := time.Now().UTC().Add(time.Hour).Format(time.RFC3339)
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"token":"fresh","attachmentToken":"attach","expiresAt":"` + expires + `"}`))
+			_, _ = w.Write([]byte(`{"token":"Bearer fresh","attachmentToken":"attach","expiresAt":"` + expires + `"}`))
 		case "/api/v1/users/self":
 			apiCount++
 			if got := r.Header.Get("Authorization"); got != "Bearer fresh" {
@@ -85,7 +85,7 @@ func TestClientRetriesOnceAfterUnauthorized(t *testing.T) {
 			loginCount++
 			expires := time.Now().UTC().Add(time.Hour).Format(time.RFC3339)
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"token":"fresh","expiresAt":"` + expires + `"}`))
+			_, _ = w.Write([]byte(`{"token":"Bearer fresh","expiresAt":"` + expires + `"}`))
 		case "/api/v1/items":
 			apiCount++
 			if apiCount == 1 {
@@ -118,6 +118,18 @@ func TestClientRetriesOnceAfterUnauthorized(t *testing.T) {
 	}
 	if loginCount != 1 || apiCount != 2 {
 		t.Fatalf("loginCount=%d apiCount=%d", loginCount, apiCount)
+	}
+}
+
+func TestAuthorizationHeaderAcceptsRawOrPrefixedToken(t *testing.T) {
+	if got := authorizationHeader("fresh"); got != "Bearer fresh" {
+		t.Fatalf("raw token header = %q", got)
+	}
+	if got := authorizationHeader("Bearer fresh"); got != "Bearer fresh" {
+		t.Fatalf("prefixed token header = %q", got)
+	}
+	if got := normalizeAuthToken("Bearer fresh"); got != "fresh" {
+		t.Fatalf("normalized token = %q", got)
 	}
 }
 

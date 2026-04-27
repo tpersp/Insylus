@@ -24,6 +24,7 @@ func newStore(host pluginhost.Host) store {
 func (s store) setConfig(ctx context.Context, item config) (configSummary, error) {
 	item.BaseURL = normalizeBaseURL(item.BaseURL)
 	item.Username = strings.TrimSpace(item.Username)
+	item.Token = normalizeAuthToken(item.Token)
 	item.LastError = strings.TrimSpace(item.LastError)
 	if item.BaseURL == "" {
 		return configSummary{}, errors.New("base_url is required")
