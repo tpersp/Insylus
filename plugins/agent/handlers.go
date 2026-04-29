@@ -84,14 +84,55 @@ func (rt runtime) handleInstallScript(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
 	_, _ = w.Write([]byte(`#!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 SERVER_URL="` + baseURL + `"
 BOOTSTRAP_TOKEN="` + token + `"
-TMP_BIN="$(mktemp)"
-curl -fsSL "$SERVER_URL/downloads/insylus-agent" -o "$TMP_BIN"
+TMP_BIN="$(mktemp /tmp/insylus-agent.XXXXXX)"
+: "${INSYLUS_AGENT_BIN_PATH:=/usr/local/bin/insylus-agent}"
+: "${INSYLUS_AGENT_CONFIG_PATH:=/etc/insylus-agent/config.json}"
+: "${INSYLUS_AGENT_SERVICE_NAME:=insylus-agent.service}"
+: "${INSYLUS_AGENT_UNIT_PATH:=/etc/systemd/system/$INSYLUS_AGENT_SERVICE_NAME}"
+OS_NAME="$(uname -s | tr '[:upper:]' '[:lower:]')"
+MACHINE="$(uname -m)"
+ARCH=""
+
+log_step() {
+  printf '==> %s\n' "$1"
+}
+
+case "$MACHINE" in
+  x86_64|amd64)
+    ARCH="amd64"
+    ;;
+  aarch64|arm64)
+    ARCH="arm64"
+    ;;
+  armv7l|armv7|armhf)
+    ARCH="armv7"
+    ;;
+  arm*)
+    printf 'Unsupported ARM architecture: %s. Insylus currently serves armv7 and arm64 agent builds.\n' "$MACHINE" >&2
+    exit 1
+    ;;
+  *)
+    printf 'Unsupported architecture: %s\n' "$MACHINE" >&2
+    exit 1
+    ;;
+esac
+
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then printf "Install failed with exit code %s\n" "$rc" >&2; fi; rm -f "$TMP_BIN"' EXIT
+
+log_step "Preparing Insylus agent installation"
+mkdir -p "$(dirname "$INSYLUS_AGENT_BIN_PATH")" "$(dirname "$INSYLUS_AGENT_CONFIG_PATH")"
+log_step "Downloading agent from Insylus for $OS_NAME/$ARCH"
+curl -fsSL "$SERVER_URL/downloads/insylus-agent?goos=$OS_NAME&goarch=$ARCH" -o "$TMP_BIN"
 chmod +x "$TMP_BIN"
-"$TMP_BIN" install --server "$SERVER_URL" --bootstrap-token "$BOOTSTRAP_TOKEN"
-rm -f "$TMP_BIN"
+log_step "Running installer"
+INSYLUS_AGENT_BIN_PATH="$INSYLUS_AGENT_BIN_PATH" \
+INSYLUS_AGENT_CONFIG_PATH="$INSYLUS_AGENT_CONFIG_PATH" \
+INSYLUS_AGENT_SERVICE_NAME="$INSYLUS_AGENT_SERVICE_NAME" \
+INSYLUS_AGENT_UNIT_PATH="$INSYLUS_AGENT_UNIT_PATH" \
+  "$TMP_BIN" install --server "$SERVER_URL" --bootstrap-token "$BOOTSTRAP_TOKEN"
 `))
 }
 
@@ -331,11 +372,21 @@ func resolveServedAgentBinaryPath(defaultPath, goos, goarch string) (string, err
 		return defaultPath, nil
 	}
 	baseDir := filepath.Dir(defaultPath)
-	candidate := filepath.Join(baseDir, "insylus-agent-"+goos+"-"+goarch)
-	if _, err := os.Stat(candidate); err == nil {
-		return candidate, nil
+	for _, candidateGOARCH := range servedAgentGOARCHCandidates(goarch) {
+		candidate := filepath.Join(baseDir, "insylus-agent-"+goos+"-"+candidateGOARCH)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
 	}
 	return "", os.ErrNotExist
+}
+
+func servedAgentGOARCHCandidates(goarch string) []string {
+	goarch = strings.TrimSpace(goarch)
+	if goarch == "arm" {
+		return []string{"armv7", "arm"}
+	}
+	return []string{goarch}
 }
 
 func defaultManagedUser() string {

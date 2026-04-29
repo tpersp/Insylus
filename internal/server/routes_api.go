@@ -378,15 +378,27 @@ func (a *App) handleAgentDownload(w http.ResponseWriter, r *http.Request) {
 }
 
 func resolveAgentBinaryPath(defaultPath, goos, goarch string) (string, error) {
+	goos = strings.TrimSpace(goos)
+	goarch = strings.TrimSpace(goarch)
 	if goos == "" || goarch == "" {
 		return defaultPath, nil
 	}
 	baseDir := filepath.Dir(defaultPath)
-	candidate := filepath.Join(baseDir, fmt.Sprintf("insylus-agent-%s-%s", goos, goarch))
-	if _, err := os.Stat(candidate); err == nil {
-		return candidate, nil
+	for _, candidateGOARCH := range agentBinaryGOARCHCandidates(goarch) {
+		candidate := filepath.Join(baseDir, fmt.Sprintf("insylus-agent-%s-%s", goos, candidateGOARCH))
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
 	}
 	return "", fmt.Errorf("no agent binary available for %s/%s", goos, goarch)
+}
+
+func agentBinaryGOARCHCandidates(goarch string) []string {
+	goarch = strings.TrimSpace(goarch)
+	if goarch == "arm" {
+		return []string{"armv7", "arm"}
+	}
+	return []string{goarch}
 }
 
 func (a *App) agentUpdateManifest(r *http.Request, device shared.Device) (shared.AgentUpdateManifest, error) {
