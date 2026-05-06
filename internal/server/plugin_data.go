@@ -50,12 +50,26 @@ func (s serverInventoryService) FindDevice(ctx context.Context, query string) ([
 	if err != nil {
 		return nil, err
 	}
-	var matches []pluginhost.InventoryDevice
+	var exactMatches []pluginhost.InventoryDevice
 	for _, device := range devices {
 		if strings.EqualFold(device.ID, query) ||
 			strings.EqualFold(device.Name, query) ||
 			strings.EqualFold(device.Hostname, query) ||
 			hasInventoryIP(device.IPs, query) {
+			exactMatches = append(exactMatches, device)
+		}
+	}
+	if len(exactMatches) > 0 {
+		return exactMatches, nil
+	}
+
+	queryLower := strings.ToLower(query)
+	var matches []pluginhost.InventoryDevice
+	for _, device := range devices {
+		if strings.Contains(strings.ToLower(device.ID), queryLower) ||
+			strings.Contains(strings.ToLower(device.Name), queryLower) ||
+			strings.Contains(strings.ToLower(device.Hostname), queryLower) ||
+			hasPartialInventoryIP(device.IPs, query) {
 			matches = append(matches, device)
 		}
 	}
@@ -181,6 +195,15 @@ func inventoryDeviceFromTarget(target pluginhost.Target) pluginhost.InventoryDev
 func hasInventoryIP(ips []string, query string) bool {
 	for _, ip := range ips {
 		if ip == query {
+			return true
+		}
+	}
+	return false
+}
+
+func hasPartialInventoryIP(ips []string, query string) bool {
+	for _, ip := range ips {
+		if strings.Contains(ip, query) {
 			return true
 		}
 	}

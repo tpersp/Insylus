@@ -552,21 +552,44 @@ func findMatchingDevices(records []DeviceRecord, query string) []DeviceRecord {
 	if query == "" {
 		return nil
 	}
-	var matches []DeviceRecord
+	var exactMatches []DeviceRecord
 	for _, record := range records {
 		if strings.EqualFold(record.Device.ID, query) ||
 			strings.EqualFold(record.Device.Name, query) ||
 			strings.EqualFold(record.Device.Hostname, query) ||
 			hasIP(record.Device.IPs, query) {
-			matches = append(matches, record)
+			exactMatches = append(exactMatches, record)
 		}
 	}
-	return matches
+	if len(exactMatches) > 0 {
+		return exactMatches
+	}
+
+	queryLower := strings.ToLower(query)
+	var partialMatches []DeviceRecord
+	for _, record := range records {
+		if strings.Contains(strings.ToLower(record.Device.ID), queryLower) ||
+			strings.Contains(strings.ToLower(record.Device.Name), queryLower) ||
+			strings.Contains(strings.ToLower(record.Device.Hostname), queryLower) ||
+			hasPartialIP(record.Device.IPs, query) {
+			partialMatches = append(partialMatches, record)
+		}
+	}
+	return partialMatches
 }
 
 func hasIP(ips []string, query string) bool {
 	for _, ip := range ips {
 		if ip == query {
+			return true
+		}
+	}
+	return false
+}
+
+func hasPartialIP(ips []string, query string) bool {
+	for _, ip := range ips {
+		if strings.Contains(ip, query) {
 			return true
 		}
 	}
