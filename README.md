@@ -239,6 +239,17 @@ and maps each enabled device to:
 
 Only `access-managed` devices with enabled non-disabled access are included in managed SSH aliases. `inventory-only` devices remain visible in inventory but are not treated as managed SSH targets.
 
+## Brokered device transfers
+
+Use the controller host for device-to-device file movement:
+
+```bash
+insylusctl transfer docker01:/srv/media/file.mkv animus:/srv/media/
+insylusctl transfer -r docker01:/srv/photos animus:/srv/archive/
+```
+
+`insylusctl transfer` resolves `DEVICE:/path` endpoints through Insylus, verifies managed SSH readiness, and runs `scp -3` from the controller. This avoids putting controller SSH credentials on every managed device just so one device can copy directly to another.
+
 Install the managed SSH sync service:
 
 ```bash

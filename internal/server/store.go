@@ -1155,6 +1155,10 @@ func (s *Store) ManagedAccountConfig(ctx context.Context, fallback shared.Manage
 	if err != nil {
 		return shared.ManagedAccountConfig{}, err
 	}
+	passwordRaw, err := s.appSetting(ctx, "managed_password_encrypted")
+	if err != nil {
+		return shared.ManagedAccountConfig{}, err
+	}
 	cfg := shared.ManagedAccountConfig{
 		ManagedUser:   strings.TrimSpace(user),
 		ManagedGroups: splitManagedGroups(groupsRaw),
@@ -1174,6 +1178,14 @@ func (s *Store) ManagedAccountConfig(ctx context.Context, fallback shared.Manage
 	}
 	if cfg.AccessMode == "" {
 		cfg.AccessMode = shared.AccessModeAudit
+	}
+	if strings.TrimSpace(passwordRaw) != "" {
+		password, err := s.decryptPluginSecret(passwordRaw)
+		if err != nil {
+			return shared.ManagedAccountConfig{}, fmt.Errorf("decrypt managed password: %w", err)
+		}
+		cfg.ManagedPassword = password
+		cfg.ManagedPasswordConfigured = true
 	}
 	return cfg, nil
 }
@@ -1218,6 +1230,25 @@ func (s *Store) SetManagedAccountConfig(ctx context.Context, cfg shared.ManagedA
 		on conflict(key) do update set value = excluded.value, updated_at = excluded.updated_at`, strings.Join(cfg.ManagedGroups, ","), now); err != nil {
 		_ = tx.Rollback()
 		return err
+	}
+	if cfg.ClearManagedPassword {
+		if _, err := tx.ExecContext(ctx, `delete from app_settings where key = 'managed_password_encrypted'`); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	} else if cfg.ManagedPassword != "" {
+		encryptedPassword, err := s.encryptPluginSecret(cfg.ManagedPassword)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `
+			insert into app_settings (key, value, updated_at)
+			values ('managed_password_encrypted', ?, ?)
+			on conflict(key) do update set value = excluded.value, updated_at = excluded.updated_at`, encryptedPassword, now); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
 	}
 	return tx.Commit()
 }

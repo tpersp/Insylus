@@ -31,8 +31,9 @@ When the Agent plugin is enabled, enrolled devices report inventory data:
 Only when both Agent and Access are enabled can Insylus emit managed-account access policy:
 
 - whether the managed account exists
-- whether the managed account is disabled, audit-only, or passwordless sudo
+- whether the managed account is disabled, audit-only, prompted sudo, or passwordless sudo
 - whether the assigned SSH public key is installed
+- whether a controller-managed local password should be set for the managed account
 
 ## Important facts
 
@@ -107,6 +108,12 @@ insylusctl services --find jellyfin --json
 curl "http://127.0.0.1:8080/api/services/find?q=jellyfin"
 ```
 
+Broker a device-to-device copy through the controller host:
+
+```bash
+insylusctl transfer docker01:/srv/media/file.mkv animus:/srv/media/
+```
+
 ## CLI reference
 
 Top-level help:
@@ -143,6 +150,14 @@ Find service instances:
 insylusctl services --find jellyfin
 insylusctl services --find jellyfin --json
 insylusctl services --find jellyfin --json --full
+```
+
+Copy files between managed devices through the controller:
+
+```bash
+insylusctl transfer docker01:/srv/media/file.mkv animus:/srv/media/
+insylusctl transfer -r docker01:/srv/photos animus:/srv/archive/
+insylusctl transfer --dry-run docker01:/tmp/report.txt animus:/tmp/report.txt
 ```
 
 Configure, inspect, and operate Docker containers over SSH:
@@ -413,6 +428,8 @@ The `info` view includes:
   The Linux account name currently managed by the controller policy. New installs default to `bob` so the remote managed account is clearly a regular user account.
 - `managed_groups`
   Internal policy groups derived from `access_mode`. Operators choose the access level; Insylus maps it to the needed Linux groups, such as audit log groups or `docker`.
+- `managed_password`
+  Agent policy only. When configured in Access Settings, the agent sets this as the local password for the managed user on enabled `access-managed` devices. It is omitted from inventory output.
 - `device_mode`
   Either `inventory-only` or `access-managed`. In `inventory-only`, Insylus does not modify users, SSH keys, sudoers, or groups.
 - `access_mode`
@@ -474,6 +491,20 @@ Why this works:
 Do not assume the friendly name and the SSH alias have identical casing.
 Prefer `ssh_alias` from the API or CLI output.
 
+## How to move files between devices
+
+For device-to-device file movement, prefer controller-brokered transfer:
+
+```bash
+insylusctl transfer SOURCE_DEVICE:/path DEST_DEVICE:/path
+```
+
+This command resolves both devices through Insylus, verifies that each remote endpoint is ready for managed SSH, and runs `scp -3` from the controller host. It does not require the source device to hold credentials for the destination device.
+
+Use `-r` for directories and `--dry-run` to print the resolved command before running it.
+
+Avoid initiating B-to-C transfers by SSHing into B and then connecting from B to C. Managed SSH credentials are controller-centered unless the operator explicitly installs separate hop credentials.
+
 ## How to interpret access mode
 
 First check `device_mode`.
@@ -499,7 +530,12 @@ First check `device_mode`.
 - the managed account should be able to read logs and inspect the system
 - the managed account should not have passwordless sudo
 
-`sudo`
+`sudo_prompted`
+
+- the managed account should be able to SSH in
+- sudo should prompt for the managed account password
+
+`sudo_passwordless`
 
 - the managed account should be able to SSH in
 - the managed account should have passwordless sudo
@@ -516,6 +552,7 @@ First check `device_mode`.
 8. Check `enforcement_succeeded`
 9. Check `last_seen_at`
 10. Use `ssh_command` or `ssh <ssh_alias>`
+11. For B-to-C file movement, use `insylusctl transfer B:/path C:/path` from the controller
 
 ## Example workflow
 
@@ -579,7 +616,7 @@ If the command is still not found:
 
 Controller install defaults can be changed with `INSYLUS_INSTALL_ROOT`, `INSYLUS_BIN_DIR`, `INSYLUS_DATA_DIR`, `INSYLUS_LISTEN_ADDR`, `INSYLUS_APP_USER`, and `INSYLUS_APP_GROUP` when running `scripts/install-insylus-service.sh`. The controller service account is distinct from the remote managed-access account configured with `INSYLUS_MANAGED_USER`.
 
-Managed user and audit group defaults can be changed from Access Settings at `/access/settings`; the legacy `/settings` path also works while the Access plugin is enabled. The persisted database setting overrides install-time managed-account defaults for future agent policy fetches. When access is enabled on a device, the agent links the account if it already exists or creates it if it is missing. Passwordless sudo is controlled per device by setting access mode to `sudo`.
+Managed user, managed password, and audit group defaults can be changed from Access Settings at `/access/settings`; the legacy `/settings` path also works while the Access plugin is enabled. The persisted database setting overrides install-time managed-account defaults for future agent policy fetches. When access is enabled on a device, the agent links the account if it already exists or creates it if it is missing. If a managed password is configured, the agent sets that password on each enabled access-managed device. Passwordless sudo is controlled per device by setting access mode to `sudo_passwordless`; prompted sudo uses `sudo_prompted`.
 
 Agent auto-update defaults can be changed from Agent Settings at `/agent/settings`.
 

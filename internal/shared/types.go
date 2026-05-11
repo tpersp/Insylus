@@ -283,9 +283,12 @@ type AgentInstallPaths struct {
 }
 
 type ManagedAccountConfig struct {
-	ManagedUser   string
-	ManagedGroups []string
-	AccessMode    AccessMode
+	ManagedUser               string
+	ManagedGroups             []string
+	AccessMode                AccessMode
+	ManagedPassword           string
+	ManagedPasswordConfigured bool
+	ClearManagedPassword      bool
 }
 
 type ManagedAccountConfigProvider interface {
@@ -299,6 +302,7 @@ type AgentPolicyResponse struct {
 	AccessMode            AccessMode          `json:"access_mode"`
 	ManagedUser           string              `json:"managed_user"`
 	ManagedGroups         []string            `json:"managed_groups,omitempty"`
+	ManagedPassword       string              `json:"managed_password,omitempty"`
 	SudoersPath           string              `json:"sudoers_path,omitempty"`
 	AuditReadmePath       string              `json:"audit_readme_path,omitempty"`
 	AuthorizedKeysPath    string              `json:"authorized_keys_path,omitempty"`

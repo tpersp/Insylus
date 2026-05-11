@@ -717,6 +717,55 @@ func TestAgentPolicyUsesConfiguredManagedUserAndGroups(t *testing.T) {
 	}
 }
 
+func TestAgentPolicyIncludesManagedPasswordForEnabledAccessManagedDevice(t *testing.T) {
+	app := newTestAppWithEnabledPlugins(t, Config{
+		DBPath: filepath.Join(t.TempDir(), "insylus.db"),
+	}, "access")
+	defer app.Close()
+
+	ctx := httptest.NewRequest(http.MethodGet, "/", nil).Context()
+	if err := app.store.SetManagedAccountConfig(ctx, shared.ManagedAccountConfig{
+		ManagedUser:     "remote",
+		AccessMode:      shared.AccessModeSudoPrompted,
+		ManagedPassword: "same-password",
+	}); err != nil {
+		t.Fatalf("SetManagedAccountConfig: %v", err)
+	}
+	device, err := app.store.CreateDevice(ctx, "node-1")
+	if err != nil {
+		t.Fatalf("CreateDevice: %v", err)
+	}
+	if err := app.store.SetDeviceMode(ctx, device.ID, shared.DeviceModeAccessManaged); err != nil {
+		t.Fatalf("SetDeviceMode: %v", err)
+	}
+	if err := app.store.UpdatePolicy(ctx, device.ID, true, shared.AccessModeSudoPrompted, nil); err != nil {
+		t.Fatalf("UpdatePolicy: %v", err)
+	}
+
+	var bootstrap shared.BootstrapResponse
+	doJSONRequest(t, app.Handler(), http.MethodPost, "/api/bootstrap/register", "", shared.BootstrapRequest{
+		BootstrapToken: device.BootstrapToken,
+		Hostname:       "node-1",
+		OSName:         "Linux",
+		AgentVersion:   "test",
+	}, &bootstrap)
+
+	var policy shared.AgentPolicyResponse
+	doJSONRequest(t, app.Handler(), http.MethodGet, "/api/policy", bootstrap.AgentToken, nil, &policy)
+	if policy.ManagedPassword != "same-password" {
+		t.Fatalf("expected managed password in enabled policy, got %q", policy.ManagedPassword)
+	}
+
+	if err := app.store.UpdatePolicy(ctx, device.ID, false, shared.AccessModeDisabled, nil); err != nil {
+		t.Fatalf("UpdatePolicy disabled: %v", err)
+	}
+	policy = shared.AgentPolicyResponse{}
+	doJSONRequest(t, app.Handler(), http.MethodGet, "/api/policy", bootstrap.AgentToken, nil, &policy)
+	if policy.ManagedPassword != "" {
+		t.Fatalf("expected disabled policy to omit managed password, got %q", policy.ManagedPassword)
+	}
+}
+
 func TestUninstallAgentPageUsesReportedInstallPaths(t *testing.T) {
 	app := newTestApp(t)
 	defer app.Close()
@@ -906,8 +955,9 @@ func TestSettingsManagedAccountFormUpdatesAgentPolicy(t *testing.T) {
 	defer app.Close()
 
 	form := url.Values{
-		"managed_user": {"remote"},
-		"access_level": {"sudo_passwordless"},
+		"managed_user":     {"remote"},
+		"access_level":     {"sudo_passwordless"},
+		"managed_password": {"shared-secret"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/settings/managed-account", bytes.NewBufferString(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -936,6 +986,13 @@ func TestSettingsManagedAccountFormUpdatesAgentPolicy(t *testing.T) {
 	}
 	if policy.AccessMode != shared.AccessModeSudoPasswordless {
 		t.Fatalf("expected access mode sudo_passwordless, got %q", policy.AccessMode)
+	}
+	cfg, err := app.ManagedAccountConfig(req.Context())
+	if err != nil {
+		t.Fatalf("ManagedAccountConfig: %v", err)
+	}
+	if !cfg.ManagedPasswordConfigured || cfg.ManagedPassword != "shared-secret" {
+		t.Fatalf("expected form-managed password to be configured, got configured=%v password=%q", cfg.ManagedPasswordConfigured, cfg.ManagedPassword)
 	}
 }
 

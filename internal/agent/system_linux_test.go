@@ -24,6 +24,16 @@ func TestManagedPolicyFromResponseUsesConfiguredGroups(t *testing.T) {
 	}
 }
 
+func TestManagedPolicyFromResponseIncludesManagedPassword(t *testing.T) {
+	got := managedPolicyFromResponse(shared.AgentPolicyResponse{
+		ManagedUser:     "operator",
+		ManagedPassword: "same-password",
+	})
+	if got.Password != "same-password" {
+		t.Fatalf("Password = %q, want configured password", got.Password)
+	}
+}
+
 func TestManagedPolicyFromResponseDefaultsGroups(t *testing.T) {
 	got := managedPolicyFromResponse(shared.AgentPolicyResponse{ManagedUser: "operator"})
 	if len(got.Groups) != 1 || got.Groups[0] != "adm" {

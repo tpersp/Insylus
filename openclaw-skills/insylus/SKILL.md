@@ -70,8 +70,10 @@ insylusctl help [COMMAND]
 | `device_mode=inventory-only` | SSH access not managed by Insylus |
 | `device_mode=access-managed` | SSH access managed by Insylus |
 | `access_mode=disabled` | Managed account locked/unavailable |
-| `access_mode=audit` | SSH works, no passwordless sudo |
-| `access_mode=sudo` | SSH works with passwordless sudo for the managed user |
+| `access_mode=audit` | SSH works, no sudo |
+| `access_mode=docker` | SSH works with Docker group access |
+| `access_mode=sudo_prompted` | SSH works and sudo prompts for the managed password |
+| `access_mode=sudo_passwordless` | SSH works with passwordless sudo for the managed user |
 | `enforcement_succeeded=false` | Not ready — policy not applied |
 | `ssh_alias` | Preferred SSH alias |
 | `last_seen_at` | Device last check-in time |
@@ -123,6 +125,26 @@ hash -r
 ```
 
 If `ssh <alias>` fails: query inventory again, check `enforcement_succeeded`, and verify `access_mode != disabled`.
+
+### Device-to-device file transfer
+
+For B-to-C file movement, broker the copy from the controller instead of SSHing into B and then connecting onward to C.
+
+Use:
+
+```bash
+insylusctl transfer SOURCE_DEVICE:/path DEST_DEVICE:/path
+```
+
+Examples:
+
+```bash
+insylusctl transfer docker01:/srv/media/file.mkv animus:/srv/media/
+insylusctl transfer -r docker01:/srv/photos animus:/srv/archive/
+insylusctl transfer --dry-run docker01:/tmp/report.txt animus:/tmp/report.txt
+```
+
+The transfer command resolves device names through Insylus, requires managed SSH readiness for remote endpoints, and runs `scp -3` from the controller host. Do not assume managed devices can SSH directly to each other.
 
 ## Field reference
 
@@ -240,7 +262,7 @@ NAME, MODE, TYPE, PURPOSE, PARENT, AGENT, SSH, ACCESS, STATUS, LAST SEEN, IP
 
 - **MODE**: `inventory-only` or `access-managed`
 - **SSH**: `ssh_alias` value or `-` if not available
-- **ACCESS**: `disabled`, `audit`, or `sudo`; `sudo` means passwordless sudo for the managed user
+- **ACCESS**: `disabled`, `audit`, `docker`, `sudo_prompted`, or `sudo_passwordless`; `sudo_passwordless` means passwordless sudo for the managed user
 - **STATUS**: `enforcement_succeeded` and `managed_account_enabled` combined
 
 ### Interpretation
@@ -657,6 +679,7 @@ The Access plugin manages SSH keys and access policies for managed devices.
 
 - Managed SSH requires the Access plugin and a successfully applied access policy.
 - SSH keys must be configured before devices can be accessed via Insylus.
+- A managed password can be configured in Access Settings. It is pushed only through authenticated agent policy for enabled `access-managed` devices and is not shown in inventory output.
 
 ## Agent plugin
 

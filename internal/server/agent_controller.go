@@ -126,8 +126,12 @@ func (a *App) withManagedAccountPolicy(ctx context.Context, policy shared.AgentP
 	}
 	user := cfg.ManagedUser
 	policy.ManagedUser = user
+	policy.ManagedPassword = ""
 	if policy.AccessMode == "" || policy.DeviceMode == shared.DeviceModeInventoryOnly {
 		policy.AccessMode = cfg.AccessMode
+	}
+	if cfg.ManagedPasswordConfigured && policy.DeviceMode == shared.DeviceModeAccessManaged && policy.ManagedAccountEnabled && policy.AccessMode != shared.AccessModeDisabled {
+		policy.ManagedPassword = cfg.ManagedPassword
 	}
 	policy.ManagedGroups = managedGroupsForAccessMode(policy.AccessMode, cfg.ManagedGroups)
 	policy.SudoersPath = "/etc/sudoers.d/insylus-" + user

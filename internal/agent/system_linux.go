@@ -22,6 +22,7 @@ const (
 type managedAccountPolicy struct {
 	User               string
 	Groups             []string
+	Password           string
 	SudoersPath        string
 	AuditReadmePath    string
 	AuthorizedKeysPath string
@@ -45,6 +46,7 @@ func managedPolicyFromResponse(policy shared.AgentPolicyResponse) managedAccount
 	return managedAccountPolicy{
 		User:               user,
 		Groups:             groups,
+		Password:           policy.ManagedPassword,
 		SudoersPath:        firstManagedPolicyValue(policy.SudoersPath, "/etc/sudoers.d/insylus-"+user),
 		AuditReadmePath:    firstManagedPolicyValue(policy.AuditReadmePath, "/etc/sudoers.d/insylus-"+user+"-audit-readme"),
 		AuthorizedKeysPath: firstManagedPolicyValue(policy.AuthorizedKeysPath, filepath.Join(managedHomeDir(user), ".ssh", "authorized_keys")),
@@ -81,6 +83,13 @@ func applyPolicy(policy shared.AgentPolicyResponse) shared.DeviceReport {
 		report.EnforcementSucceeded = false
 		report.ErrorMessage = err.Error()
 		return report
+	}
+	if managed.Password != "" {
+		if err := ensurePassword(managed); err != nil {
+			report.EnforcementSucceeded = false
+			report.ErrorMessage = "failed to set managed password"
+			return report
+		}
 	}
 	report.UserPresent = true
 	if policy.AssignedKey != "" {
@@ -150,6 +159,16 @@ func ensureUser(user string) error {
 		return nil
 	}
 	return exec.Command("useradd", "-m", "-s", "/bin/bash", user).Run()
+}
+
+func ensurePassword(managed managedAccountPolicy) error {
+	cmd := exec.Command("chpasswd")
+	cmd.Stdin = strings.NewReader(managed.User + ":" + managed.Password + "\n")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
+	}
+	_ = exec.Command("usermod", "--unlock", managed.User).Run()
+	return nil
 }
 
 func disableManagedUser(managed managedAccountPolicy) error {

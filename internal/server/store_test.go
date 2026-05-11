@@ -97,8 +97,9 @@ func TestManagedAccountConfigUsesFallbackAndPersistedSettings(t *testing.T) {
 	}
 
 	if err := store.SetManagedAccountConfig(context.Background(), shared.ManagedAccountConfig{
-		ManagedUser: "remote",
-		AccessMode:  shared.AccessModeDocker,
+		ManagedUser:     "remote",
+		AccessMode:      shared.AccessModeDocker,
+		ManagedPassword: "correct horse battery staple",
 	}); err != nil {
 		t.Fatalf("SetManagedAccountConfig: %v", err)
 	}
@@ -112,9 +113,41 @@ func TestManagedAccountConfigUsesFallbackAndPersistedSettings(t *testing.T) {
 	if hasString(cfg.ManagedGroups, "docker") {
 		t.Fatalf("managed account config should persist base audit groups, got %+v", cfg.ManagedGroups)
 	}
+	if !cfg.ManagedPasswordConfigured || cfg.ManagedPassword != "correct horse battery staple" {
+		t.Fatalf("unexpected managed password state: configured=%v password=%q", cfg.ManagedPasswordConfigured, cfg.ManagedPassword)
+	}
 	groups := managedGroupsForAccessMode(shared.AccessModeDocker, cfg.ManagedGroups)
 	if !hasString(groups, "docker") || !hasString(groups, "adm") {
 		t.Fatalf("docker access groups = %+v, want audit groups plus docker", groups)
+	}
+
+	if err := store.SetManagedAccountConfig(context.Background(), shared.ManagedAccountConfig{
+		ManagedUser: "remote",
+		AccessMode:  shared.AccessModeAudit,
+	}); err != nil {
+		t.Fatalf("SetManagedAccountConfig preserve password: %v", err)
+	}
+	cfg, err = store.ManagedAccountConfig(context.Background(), fallback)
+	if err != nil {
+		t.Fatalf("ManagedAccountConfig preserved password: %v", err)
+	}
+	if !cfg.ManagedPasswordConfigured || cfg.ManagedPassword != "correct horse battery staple" {
+		t.Fatalf("expected managed password to be preserved, got configured=%v password=%q", cfg.ManagedPasswordConfigured, cfg.ManagedPassword)
+	}
+
+	if err := store.SetManagedAccountConfig(context.Background(), shared.ManagedAccountConfig{
+		ManagedUser:          "remote",
+		AccessMode:           shared.AccessModeAudit,
+		ClearManagedPassword: true,
+	}); err != nil {
+		t.Fatalf("SetManagedAccountConfig clear password: %v", err)
+	}
+	cfg, err = store.ManagedAccountConfig(context.Background(), fallback)
+	if err != nil {
+		t.Fatalf("ManagedAccountConfig cleared password: %v", err)
+	}
+	if cfg.ManagedPasswordConfigured || cfg.ManagedPassword != "" {
+		t.Fatalf("expected managed password to be cleared, got configured=%v password=%q", cfg.ManagedPasswordConfigured, cfg.ManagedPassword)
 	}
 }
 

@@ -62,6 +62,9 @@ Linux account name currently managed by the controller policy. New installs defa
 ### `managed_groups`
 Internal policy groups derived from `access_mode`; operators choose an access level instead of choosing Linux groups directly.
 
+### `managed_password`
+Agent policy only. When configured, Insylus sets the managed user's local password on enabled `access-managed` devices. It is not exposed in inventory output.
+
 ### `access_mode`
 - `disabled` — managed account is locked or unavailable.
 - `audit` — SSH works with read-only audit/log access.

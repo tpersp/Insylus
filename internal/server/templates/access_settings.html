@@ -33,6 +33,12 @@
             <option value="sudo_passwordless" {{ if eq .ManagedAccount.AccessMode "sudo_passwordless" }}selected{{ end }}>sudo (passwordless) - Full admin access (no password)</option>
           </select>
         </label>
+        <label>Managed password
+          <input type="password" name="managed_password" autocomplete="new-password" placeholder="{{ if .ManagedAccount.ManagedPasswordConfigured }}configured - leave blank to keep{{ else }}optional shared password{{ end }}">
+        </label>
+        {{ if .ManagedAccount.ManagedPasswordConfigured }}
+        <label><input type="checkbox" name="clear_managed_password"> Clear managed password</label>
+        {{ end }}
         <p class="muted">This is the remote Linux account Insylus manages on access-managed devices. It is separate from the controller service account that runs Insylus.</p>
         <p class="muted">When access is enabled on a device, the agent links this account if it already exists, or creates it if it is missing.</p>
         <button type="submit">Save managed account</button>
@@ -50,6 +56,7 @@
         <p><span class="label">Controller service user:</span> <strong>insylus</strong></p>
         <p><span class="label">Default remote managed user:</span> <strong>{{ .ManagedAccount.ManagedUser }}</strong></p>
         <p><span class="label">Default access mode:</span> <strong>{{ .ManagedAccount.AccessMode }}</strong></p>
+        <p><span class="label">Managed password:</span> <strong>{{ if .ManagedAccount.ManagedPasswordConfigured }}configured{{ else }}not configured{{ end }}</strong></p>
         <p><span class="label">Access groups:</span> <strong>derived from access level</strong></p>
         <p><span class="label">Existing account:</span> <strong>linked</strong></p>
         <p><span class="label">Missing account:</span> <strong>created by agent</strong></p>
