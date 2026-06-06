@@ -1,0 +1,15 @@
+Install/copy the `insylus` skill directory into your OpenClaw/Hermes skills folder.
+
+Source:
+
+  openclaw-skills/insylus
+
+The skill is API-only. Agents using it need:
+
+  export INSYLUS_API="http://<insylus-controller>:8097"
+
+The only required command-line tool is `curl`.
+
+Optional but useful:
+
+  jq

@@ -98,6 +98,7 @@ Full documentation:
 
 - [CLI Guide](docs/CLI.md)
 - [API Guide](docs/API.md)
+- [OpenClaw/Hermes API Skill](openclaw-skills/insylus/SKILL.md)
 
 ## API
 
