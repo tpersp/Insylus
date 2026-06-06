@@ -11,13 +11,13 @@ http://127.0.0.1:8097
 For a remote controller, pass `--api`:
 
 ```bash
-insylus access list --api http://10.10.10.29:8097
+insylus access list --api http://insylus.example.local:8097
 ```
 
 Or set:
 
 ```bash
-export INSYLUS_API=http://10.10.10.29:8097
+export INSYLUS_API=http://insylus.example.local:8097
 ```
 
 Use `--db PATH` only when intentionally bypassing the API and editing a SQLite database directly.
@@ -51,7 +51,7 @@ Supported sudo values:
 Add a server:
 
 ```bash
-insylus server add --name atlas --host atlas.local --addr 10.0.0.5 --notes "controller"
+insylus server add --name atlas --host atlas.local --addr 192.0.2.5 --notes "controller"
 ```
 
 List servers:
@@ -69,7 +69,7 @@ insylus server list --json
 Update a server:
 
 ```bash
-insylus server update --id 1 --name atlas --host atlas.local --addr 10.0.0.5 --notes "main controller"
+insylus server update --id 1 --name atlas --host atlas.local --addr 192.0.2.5 --notes "main controller"
 ```
 
 Updates require `--id`. Use `server list --json` to find it.
@@ -157,7 +157,7 @@ Access updates require `--id`. Use `access list --json` to find it.
 Create a server:
 
 ```bash
-insylus server add --name atlas --host atlas.local --addr 10.0.0.5
+insylus server add --name atlas --host atlas.local --addr 192.0.2.5
 ```
 
 Create a principal:
@@ -209,13 +209,13 @@ Example output:
 Run a single command against a remote controller:
 
 ```bash
-insylus access list --api http://10.10.10.29:8097
+insylus access list --api http://insylus.example.local:8097
 ```
 
 Set a default remote controller:
 
 ```bash
-export INSYLUS_API=http://10.10.10.29:8097
+export INSYLUS_API=http://insylus.example.local:8097
 insylus access list
 ```
 

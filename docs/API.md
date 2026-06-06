@@ -11,7 +11,7 @@ http://127.0.0.1:8097
 From another machine on the same network, use the controller address, for example:
 
 ```text
-http://10.10.10.29:8097
+http://insylus.example.local:8097
 ```
 
 All request bodies are JSON. All API responses are JSON.
@@ -33,7 +33,7 @@ All request bodies are JSON. All API responses are JSON.
   "id": 1,
   "name": "atlas",
   "hostname": "atlas.local",
-  "address": "10.0.0.5",
+  "address": "192.0.2.5",
   "notes": "controller",
   "created_at": "2026-06-06T13:09:30Z",
   "updated_at": "2026-06-06T13:09:30Z"
@@ -148,7 +148,7 @@ Response:
     "id": 1,
     "name": "atlas",
     "hostname": "atlas.local",
-    "address": "10.0.0.5",
+    "address": "192.0.2.5",
     "notes": "controller",
     "created_at": "2026-06-06T13:09:30Z",
     "updated_at": "2026-06-06T13:09:30Z"
@@ -164,7 +164,7 @@ curl -s -X POST http://127.0.0.1:8097/api/servers \
   -d '{
     "name": "atlas",
     "hostname": "atlas.local",
-    "address": "10.0.0.5",
+    "address": "192.0.2.5",
     "notes": "controller"
   }'
 ```
@@ -180,7 +180,7 @@ curl -s -X PUT http://127.0.0.1:8097/api/servers \
     "id": 1,
     "name": "atlas",
     "hostname": "atlas.local",
-    "address": "10.0.0.5",
+    "address": "192.0.2.5",
     "notes": "main controller"
   }'
 ```
@@ -285,11 +285,11 @@ A simple automation flow:
 Example:
 
 ```bash
-BASE=http://10.10.10.29:8097
+BASE=http://insylus.example.local:8097
 
 curl -s -X POST "$BASE/api/servers" \
   -H 'Content-Type: application/json' \
-  -d '{"name":"atlas","hostname":"atlas.local","address":"10.0.0.5"}'
+  -d '{"name":"atlas","hostname":"atlas.local","address":"192.0.2.5"}'
 
 curl -s -X POST "$BASE/api/principals" \
   -H 'Content-Type: application/json' \

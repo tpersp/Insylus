@@ -84,7 +84,7 @@ git pull
 ## CLI Examples
 
 ```bash
-insylus server add --name atlas --host atlas.local --addr 10.0.0.5
+insylus server add --name atlas --host atlas.local --addr 192.0.2.5
 insylus principal add --name codex --kind ai-agent
 insylus access grant --server atlas --principal codex --account aia --sudo passwordless
 insylus access list

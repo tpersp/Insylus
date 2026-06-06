@@ -21,10 +21,10 @@ export INSYLUS_API="http://<insylus-controller>:8097"
 Example:
 
 ```bash
-export INSYLUS_API="http://10.10.10.29:8097"
+export INSYLUS_API="http://insylus.example.local:8097"
 ```
 
-If `INSYLUS_API` is not set, ask the user for the Insylus controller URL.
+If `INSYLUS_API` is not set, ask the user for the Insylus controller URL. Do not guess or invent a private IP.
 
 ## Core Rules
 
@@ -147,7 +147,7 @@ curl -fsS -X POST "$BASE/api/servers" \
   -d '{
     "name": "atlas",
     "hostname": "atlas.local",
-    "address": "10.0.0.5",
+    "address": "192.0.2.5",
     "notes": "controller"
   }'
 ```
@@ -193,7 +193,7 @@ curl -fsS -X PUT "$BASE/api/servers" \
     "id": 1,
     "name": "atlas",
     "hostname": "atlas.local",
-    "address": "10.0.0.5",
+    "address": "192.0.2.5",
     "notes": "main controller"
   }'
 ```
