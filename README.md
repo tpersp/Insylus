@@ -38,8 +38,7 @@ Do not run it with `sudo`; it will ask for sudo only when needed.
 
 The installer handles the normal service setup:
 
-- uses Go to test and build Insylus when Go is installed
-- otherwise downloads the latest `insylus-linux-amd64` release binary from GitHub
+- uses Go to test and build the current checkout
 - installs `/opt/insylus/bin/insylus`
 - creates/uses the `insylus` service account
 - writes and starts `insylus.service`
@@ -51,7 +50,14 @@ Minimum install requirements:
 - `bash`
 - `sudo`
 - `systemd`
-- either `go` or `curl`/`wget` for downloading the release binary
+- `go`
+
+On Debian/Ubuntu:
+
+```bash
+sudo apt update
+sudo apt install golang-go
+```
 
 Optional environment overrides:
 
@@ -62,10 +68,17 @@ INSYLUS_DATA_DIR=/var/lib/insylus \
 ./install
 ```
 
-Install a specific release binary when Go is not installed:
+Release binary install is available only as an explicit fallback:
 
 ```bash
-INSYLUS_VERSION=v2026.06.06 ./install
+INSYLUS_INSTALL_MODE=release INSYLUS_VERSION=v2026.06.06.2 ./install
+```
+
+For normal updates, prefer:
+
+```bash
+git pull
+./install
 ```
 
 ## CLI Examples

@@ -29,6 +29,7 @@ UNIT_PATH="/etc/systemd/system/$SERVICE_NAME"
 DIST_BIN="$ROOT_DIR/dist/insylus"
 REPO="${INSYLUS_RELEASE_REPO:-tpersp/Insylus}"
 VERSION="${INSYLUS_VERSION:-latest}"
+INSTALL_MODE="${INSYLUS_INSTALL_MODE:-source}"
 
 if [[ "$LISTEN_ADDR" == :* ]]; then
   LOCAL_URL="http://127.0.0.1$LISTEN_ADDR"
@@ -59,7 +60,23 @@ release_download_base() {
 
 prepare_binary() {
   mkdir -p "$ROOT_DIR/dist"
-  if command -v go >/dev/null 2>&1; then
+  if [ "$INSTALL_MODE" = "source" ]; then
+    if ! command -v go >/dev/null 2>&1; then
+      cat <<'EOF'
+Go is required for the default source install.
+
+Install Go, then run ./install again.
+
+On Debian/Ubuntu:
+  sudo apt update
+  sudo apt install golang-go
+
+If you explicitly want to install a release binary instead:
+  INSYLUS_INSTALL_MODE=release INSYLUS_VERSION=v2026.06.06.2 ./install
+EOF
+      exit 1
+    fi
+
     echo "==> Testing"
     go test ./...
 
@@ -68,20 +85,26 @@ prepare_binary() {
     return
   fi
 
+  if [ "$INSTALL_MODE" != "release" ]; then
+    echo "Unknown INSYLUS_INSTALL_MODE: $INSTALL_MODE"
+    echo "Use source or release."
+    exit 1
+  fi
+
   os="$(uname -s | tr '[:upper:]' '[:lower:]')"
   arch="$(uname -m)"
   case "$arch" in
     x86_64|amd64) arch="amd64" ;;
     *)
-      echo "Go is not installed and no prebuilt binary is available for architecture: $arch"
-      echo "Install Go, or set INSYLUS_VERSION to a release that provides your architecture."
+      echo "No prebuilt release binary is available for architecture: $arch"
+      echo "Use source mode with Go installed."
       exit 1
       ;;
   esac
 
   asset="insylus-$os-$arch"
   base="$(release_download_base)"
-  echo "==> Go not found; downloading $asset from $REPO ($VERSION)"
+  echo "==> Downloading $asset from $REPO ($VERSION)"
   download "$base/$asset" "$DIST_BIN"
   chmod 0755 "$DIST_BIN"
 
