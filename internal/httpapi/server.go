@@ -1,14 +1,19 @@
 package httpapi
 
 import (
+	"embed"
 	"encoding/json"
 	"html/template"
+	"io/fs"
 	"net/http"
 	"strconv"
 
 	"insylus/internal/model"
 	"insylus/internal/store"
 )
+
+//go:embed static/*.svg
+var embeddedStatic embed.FS
 
 type Server struct {
 	store *store.Store
@@ -46,6 +51,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) routes() {
+	staticFS, err := fs.Sub(embeddedStatic, "static")
+	if err == nil {
+		s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	}
 	s.mux.HandleFunc("/", s.handleIndex)
 	s.mux.HandleFunc("/manage", s.handleManage)
 	s.mux.HandleFunc("/servers", s.handleServerForm)
@@ -401,7 +410,9 @@ const baseStyle = `
 * { box-sizing: border-box; }
 body { margin:0; font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif; color:var(--ink); background:var(--bg); }
 header { padding:18px 24px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:18px; background:#111820; }
-.brand { display:flex; align-items:baseline; gap:14px; min-width:0; }
+.brand { display:flex; align-items:center; gap:12px; min-width:0; }
+.brand-mark { width:38px; height:38px; flex:0 0 auto; }
+.brand-text { display:grid; gap:1px; }
 h1 { margin:0; font-size:22px; letter-spacing:0; }
 h2 { margin:0 0 10px; font-size:16px; letter-spacing:0; }
 nav { display:flex; gap:8px; }
@@ -443,7 +454,6 @@ button { border:0; border-radius:6px; padding:9px 10px; font:inherit; font-weigh
 code { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:12px; }
 @media (max-width: 760px) {
 	header { padding:16px; display:grid; gap:12px; }
-	.brand { display:block; }
 	main { padding:16px; }
 	.summary,.grid,.forms,.edit-row,.edit-row.server,.edit-row.principal { grid-template-columns:1fr; }
 	nav { width:100%; }
@@ -466,10 +476,12 @@ func pageStart(title, active string) string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>` + title + `</title>
+<link rel="icon" type="image/svg+xml" href="/static/insylus-favicon.svg">
+<link rel="shortcut icon" href="/static/insylus-favicon.svg">
 <style>` + baseStyle + `</style>
 </head>
 <body>
-<header><div class="brand"><h1>Insylus</h1><span>server access inventory</span></div><nav><a class="` + dashboardActive + `" href="/">Dashboard</a><a class="` + manageActive + `" href="/manage">Manage</a></nav></header>
+<header><div class="brand"><img class="brand-mark" src="/static/insylus-icon.svg" alt="" width="38" height="38"><div class="brand-text"><h1>Insylus</h1><span>server access inventory</span></div></div><nav><a class="` + dashboardActive + `" href="/">Dashboard</a><a class="` + manageActive + `" href="/manage">Manage</a></nav></header>
 <main>`
 }
 
