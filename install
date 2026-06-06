@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "${EUID:-$(id -u)}" -eq 0 ]; then
+  echo "Do not run this installer with sudo."
+  echo "Run ./install as your normal user; it will ask sudo only for system install steps."
+  exit 1
+fi
+
+if ! command -v go >/dev/null 2>&1; then
+  echo "go is required but was not found in PATH."
+  exit 1
+fi
+
+if ! command -v sudo >/dev/null 2>&1; then
+  echo "sudo is required but was not found in PATH."
+  exit 1
+fi
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT_DIR"
+
+INSTALL_ROOT="${INSYLUS_INSTALL_ROOT:-/opt/insylus}"
+BIN_DIR="${INSYLUS_BIN_DIR:-$INSTALL_ROOT/bin}"
+DATA_DIR="${INSYLUS_DATA_DIR:-/var/lib/insylus}"
+DB_PATH="${INSYLUS_DB_PATH:-$DATA_DIR/insylus.db}"
+LISTEN_ADDR="${INSYLUS_LISTEN_ADDR:-:8097}"
+APP_USER="${INSYLUS_APP_USER:-insylus}"
+APP_GROUP="${INSYLUS_APP_GROUP:-$APP_USER}"
+OWNER_USER="${INSYLUS_OWNER_USER:-$(id -un)}"
+OWNER_GROUP="${INSYLUS_OWNER_GROUP:-$(id -gn)}"
+SERVICE_NAME="${INSYLUS_SERVICE_NAME:-insylus.service}"
+UNIT_PATH="/etc/systemd/system/$SERVICE_NAME"
+DIST_BIN="$ROOT_DIR/dist/insylus"
+
+if [[ "$LISTEN_ADDR" == :* ]]; then
+  LOCAL_URL="http://127.0.0.1$LISTEN_ADDR"
+else
+  LOCAL_URL="http://$LISTEN_ADDR"
+fi
+
+echo "==> Testing"
+go test ./...
+
+echo "==> Building"
+mkdir -p "$ROOT_DIR/dist"
+go build -o "$DIST_BIN" ./cmd/insylus
+
+echo "==> Preparing service account"
+if ! getent group "$APP_GROUP" >/dev/null 2>&1; then
+  sudo groupadd --system "$APP_GROUP"
+fi
+if ! id "$APP_USER" >/dev/null 2>&1; then
+  sudo useradd --system --gid "$APP_GROUP" --home-dir "$DATA_DIR" --shell /usr/sbin/nologin "$APP_USER"
+fi
+
+echo "==> Preparing directories"
+sudo install -d -m 2775 -o "$OWNER_USER" -g "$OWNER_GROUP" "$INSTALL_ROOT" "$BIN_DIR"
+sudo install -d -m 0750 -o "$APP_USER" -g "$APP_GROUP" "$DATA_DIR"
+
+echo "==> Installing binary"
+sudo install -m 0775 -o "$OWNER_USER" -g "$OWNER_GROUP" "$DIST_BIN" "$BIN_DIR/insylus"
+
+if [ -e "$UNIT_PATH" ]; then
+  BACKUP_PATH="$UNIT_PATH.backup-$(date +%Y%m%d-%H%M%S)"
+  echo "==> Backing up existing unit to $BACKUP_PATH"
+  sudo cp "$UNIT_PATH" "$BACKUP_PATH"
+fi
+
+echo "==> Installing systemd unit"
+TMP_UNIT="$(mktemp)"
+cat > "$TMP_UNIT" <<EOF
+[Unit]
+Description=Insylus
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=$APP_USER
+Group=$APP_GROUP
+WorkingDirectory=$DATA_DIR
+ExecStart=$BIN_DIR/insylus serve --listen $LISTEN_ADDR --db $DB_PATH
+Restart=always
+RestartSec=5
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=$DATA_DIR
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo install -m 0644 "$TMP_UNIT" "$UNIT_PATH"
+rm -f "$TMP_UNIT"
+
+echo "==> Installing command shims"
+sudo ln -sfn "$BIN_DIR/insylus" /usr/local/bin/insylus
+sudo ln -sfn "$BIN_DIR/insylus" /usr/local/bin/insylusctl
+
+echo "==> Starting service"
+sudo systemctl daemon-reload
+sudo systemctl enable "$SERVICE_NAME"
+sudo systemctl restart "$SERVICE_NAME"
+
+echo "==> Verifying"
+sleep 1
+systemctl status --no-pager "$SERVICE_NAME"
+
+if command -v curl >/dev/null 2>&1; then
+  curl -fsS "$LOCAL_URL/api/access" >/dev/null
+fi
+
+HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+echo
+echo "Insylus installed."
+echo "Service: $SERVICE_NAME"
+echo "Binary:  $BIN_DIR/insylus"
+echo "Data:    $DB_PATH"
+echo "Local:   $LOCAL_URL"
+if [ -n "$HOST_IP" ] && [[ "$LISTEN_ADDR" == :* ]]; then
+  echo "Network: http://$HOST_IP$LISTEN_ADDR"
+fi

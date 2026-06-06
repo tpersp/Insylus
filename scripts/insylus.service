@@ -1,0 +1,20 @@
+[Unit]
+Description=Insylus
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=insylus
+Group=insylus
+WorkingDirectory=/var/lib/insylus
+ExecStart=/opt/insylus/bin/insylus serve --listen :8097 --db /var/lib/insylus/insylus.db
+Restart=always
+RestartSec=5
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/insylus
+
+[Install]
+WantedBy=multi-user.target
