@@ -34,9 +34,24 @@ From the repo root:
 ./install
 ```
 
-The installer builds Insylus, installs `/opt/insylus/bin/insylus`, creates/uses the `insylus` service account, writes `insylus.service`, enables and starts it, and installs `insylus`/`insylusctl` command shims.
-
 Do not run it with `sudo`; it will ask for sudo only when needed.
+
+The installer handles the normal service setup:
+
+- uses Go to test and build Insylus when Go is installed
+- otherwise downloads the latest `insylus-linux-amd64` release binary from GitHub
+- installs `/opt/insylus/bin/insylus`
+- creates/uses the `insylus` service account
+- writes and starts `insylus.service`
+- installs `insylus` and `insylusctl` command shims
+- verifies the local API
+
+Minimum install requirements:
+
+- `bash`
+- `sudo`
+- `systemd`
+- either `go` or `curl`/`wget` for downloading the release binary
 
 Optional environment overrides:
 
@@ -45,6 +60,12 @@ INSYLUS_LISTEN_ADDR=:8081 \
 INSYLUS_INSTALL_ROOT=/opt/insylus \
 INSYLUS_DATA_DIR=/var/lib/insylus \
 ./install
+```
+
+Install a specific release binary when Go is not installed:
+
+```bash
+INSYLUS_VERSION=v2026.06.06 ./install
 ```
 
 ## CLI Examples

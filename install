@@ -7,17 +7,12 @@ if [ "${EUID:-$(id -u)}" -eq 0 ]; then
   exit 1
 fi
 
-if ! command -v go >/dev/null 2>&1; then
-  echo "go is required but was not found in PATH."
-  exit 1
-fi
-
 if ! command -v sudo >/dev/null 2>&1; then
   echo "sudo is required but was not found in PATH."
   exit 1
 fi
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${BASH_SOURCE[0]%/*}" && pwd)"
 cd "$ROOT_DIR"
 
 INSTALL_ROOT="${INSYLUS_INSTALL_ROOT:-/opt/insylus}"
@@ -32,6 +27,8 @@ OWNER_GROUP="${INSYLUS_OWNER_GROUP:-$(id -gn)}"
 SERVICE_NAME="${INSYLUS_SERVICE_NAME:-insylus.service}"
 UNIT_PATH="/etc/systemd/system/$SERVICE_NAME"
 DIST_BIN="$ROOT_DIR/dist/insylus"
+REPO="${INSYLUS_RELEASE_REPO:-tpersp/Insylus}"
+VERSION="${INSYLUS_VERSION:-latest}"
 
 if [[ "$LISTEN_ADDR" == :* ]]; then
   LOCAL_URL="http://127.0.0.1$LISTEN_ADDR"
@@ -39,12 +36,66 @@ else
   LOCAL_URL="http://$LISTEN_ADDR"
 fi
 
-echo "==> Testing"
-go test ./...
+download() {
+  url="$1"
+  out="$2"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fL "$url" -o "$out"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -O "$out" "$url"
+  else
+    echo "curl or wget is required to download a release binary when Go is not installed."
+    exit 1
+  fi
+}
 
-echo "==> Building"
-mkdir -p "$ROOT_DIR/dist"
-go build -o "$DIST_BIN" ./cmd/insylus
+release_download_base() {
+  if [ "$VERSION" = "latest" ]; then
+    echo "https://github.com/$REPO/releases/latest/download"
+  else
+    echo "https://github.com/$REPO/releases/download/$VERSION"
+  fi
+}
+
+prepare_binary() {
+  mkdir -p "$ROOT_DIR/dist"
+  if command -v go >/dev/null 2>&1; then
+    echo "==> Testing"
+    go test ./...
+
+    echo "==> Building"
+    go build -o "$DIST_BIN" ./cmd/insylus
+    return
+  fi
+
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64|amd64) arch="amd64" ;;
+    *)
+      echo "Go is not installed and no prebuilt binary is available for architecture: $arch"
+      echo "Install Go, or set INSYLUS_VERSION to a release that provides your architecture."
+      exit 1
+      ;;
+  esac
+
+  asset="insylus-$os-$arch"
+  base="$(release_download_base)"
+  echo "==> Go not found; downloading $asset from $REPO ($VERSION)"
+  download "$base/$asset" "$DIST_BIN"
+  chmod 0755 "$DIST_BIN"
+
+  if [ "$VERSION" != "latest" ]; then
+    checksum_file="$ROOT_DIR/dist/$asset.sha256"
+    if download "$base/$asset-v${VERSION#v}.sha256" "$checksum_file" >/dev/null 2>&1; then
+      (cd "$ROOT_DIR/dist" && sha256sum -c "${checksum_file##*/}")
+    else
+      echo "==> Checksum file not found; continuing without checksum verification"
+    fi
+  fi
+}
+
+prepare_binary
 
 echo "==> Preparing service account"
 if ! getent group "$APP_GROUP" >/dev/null 2>&1; then
