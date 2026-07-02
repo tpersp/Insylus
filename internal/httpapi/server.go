@@ -30,12 +30,11 @@ type dashboardRow struct {
 }
 
 type dashboardGrant struct {
-	PrincipalName  string
-	PrincipalKind  string
-	PrincipalNotes string
-	Account        string
-	Sudo           string
-	Notes          string
+	PrincipalName string
+	PrincipalKind string
+	Account       string
+	Sudo          string
+	Notes         string
 }
 
 type pageData struct {
@@ -479,12 +478,11 @@ func buildDashboardRows(servers []model.Server, principals []model.Principal, gr
 		}
 		rows[i].HasAccess = true
 		rows[i].Grants = append(rows[i].Grants, dashboardGrant{
-			PrincipalName:  grant.PrincipalName,
-			PrincipalKind:  principal.Kind,
-			PrincipalNotes: principal.Notes,
-			Account:        grant.Account,
-			Sudo:           grant.Sudo,
-			Notes:          grant.Notes,
+			PrincipalName: grant.PrincipalName,
+			PrincipalKind: principal.Kind,
+			Account:       grant.Account,
+			Sudo:          grant.Sudo,
+			Notes:         grant.Notes,
 		})
 	}
 	return rows
@@ -511,19 +509,22 @@ main { padding:20px 24px 32px; display:grid; gap:20px; }
 section { min-width:0; }
 .dashboard { overflow:auto; border:1px solid var(--line); border-radius:8px; background:var(--panel); }
 .dashboard table { width:100%; border-collapse:collapse; min-width:860px; }
-.dashboard th,.dashboard td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:middle; }
+.dashboard th,.dashboard td { padding:9px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:middle; }
 .dashboard th { color:var(--muted); font-size:12px; font-weight:700; background:#121a23; position:sticky; top:0; }
+.dashboard tbody tr:nth-child(even) { background:#19212b; }
+.dashboard tbody tr:nth-child(odd) { background:var(--panel); }
 .dashboard tr:last-child td { border-bottom:0; }
 .dashboard .primary { font-weight:700; }
 .dashboard .secondary { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
-.badge { display:inline-flex; align-items:center; min-height:24px; padding:2px 8px; border:1px solid var(--line); border-radius:999px; background:var(--field); color:var(--muted); font-size:12px; font-weight:700; }
+.badge { display:inline-flex; align-items:center; min-height:20px; padding:1px 6px; border:1px solid var(--line); border-radius:999px; background:var(--field); color:var(--muted); font-size:11px; font-weight:700; white-space:nowrap; }
 .badge.ai-agent { color:var(--accent); border-color:#155e59; }
 .badge.human { color:#93c5fd; border-color:#1d4ed8; }
 .badge.service { color:#c4b5fd; border-color:#6d28d9; }
-.grant-list { display:flex; flex-wrap:wrap; gap:8px; }
-.grant-chip { border:1px solid var(--line); border-radius:8px; background:var(--field); padding:8px; display:grid; gap:5px; min-width:180px; }
-.grant-chip strong { font-size:13px; }
-.grant-meta { display:flex; flex-wrap:wrap; gap:6px; align-items:center; color:var(--muted); font-size:12px; }
+.grant-list { display:flex; flex-wrap:wrap; gap:6px; }
+.grant-chip { border:1px solid #2b3949; border-radius:6px; background:#101720; padding:5px 7px; display:inline-flex; gap:7px; align-items:center; min-height:30px; max-width:100%; }
+.grant-chip strong { font-size:13px; font-weight:700; white-space:nowrap; }
+.grant-chip code { color:var(--muted); }
+.grant-meta { display:inline-flex; gap:6px; align-items:center; color:var(--muted); font-size:12px; white-space:nowrap; }
 .sudo { font-weight:700; }
 .sudo.passwordless { color:var(--danger); }
 .sudo.prompted { color:var(--warn); }
@@ -602,7 +603,7 @@ var dashboardTemplate = template.Must(template.New("dashboard").Parse(pageStart(
 				<tr>
 					<td><span class="primary">{{.ServerName}}</span>{{if .Hostname}}<span class="secondary">{{.Hostname}}</span>{{end}}</td>
 					<td>{{if .Address}}<code>{{.Address}}</code>{{else}}<span class="empty">none</span>{{end}}</td>
-					<td>{{if .HasAccess}}<div class="grant-list">{{range .Grants}}<div class="grant-chip"><div><strong>{{.PrincipalName}}</strong> {{if .PrincipalKind}}<span class="badge {{.PrincipalKind}}">{{.PrincipalKind}}</span>{{end}}</div><div class="grant-meta"><code>{{.Account}}</code><span class="sudo {{.Sudo}}">{{.Sudo}}</span></div>{{if .PrincipalNotes}}<span class="secondary">{{.PrincipalNotes}}</span>{{end}}{{if .Notes}}<span class="secondary">{{.Notes}}</span>{{end}}</div>{{end}}</div>{{else}}<span class="empty">no access recorded</span>{{end}}</td>
+					<td>{{if .HasAccess}}<div class="grant-list">{{range .Grants}}<div class="grant-chip"><strong>{{.PrincipalName}}</strong>{{if .PrincipalKind}}<span class="badge {{.PrincipalKind}}">{{.PrincipalKind}}</span>{{end}}<span class="grant-meta"><code>{{.Account}}</code><span class="sudo {{.Sudo}}">{{.Sudo}}</span></span></div>{{end}}</div>{{else}}<span class="empty">no access recorded</span>{{end}}</td>
 					<td>{{.ServerNotes}}</td>
 				</tr>
 				{{end}}

@@ -45,8 +45,8 @@ func TestBuildDashboardRowsIncludesAccessAndServersWithoutAccess(t *testing.T) {
 	if rows[0].Grants[0].PrincipalKind != model.PrincipalAIAgent || rows[0].Grants[0].Notes != "automation" {
 		t.Fatalf("expected grant details on grouped row, got %+v", rows[0].Grants[0])
 	}
-	if rows[0].ServerNotes != "controller" || rows[0].Grants[0].PrincipalNotes != "default coding agent" {
-		t.Fatalf("expected server and principal notes on grouped row, got %+v", rows[0])
+	if rows[0].ServerNotes != "controller" {
+		t.Fatalf("expected server notes on grouped row, got %+v", rows[0])
 	}
 	if rows[1].ServerName != "pi" || rows[1].HasAccess {
 		t.Fatalf("expected server without access row, got %+v", rows[1])
