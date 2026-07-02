@@ -74,6 +74,14 @@ insylus server update --id 1 --name atlas --host atlas.local --addr 192.0.2.5 --
 
 Updates require `--id`. Use `server list --json` to find it.
 
+Delete a server:
+
+```bash
+insylus server delete --id 1
+```
+
+Deleting a server also removes its access grants.
+
 ## Principals
 
 Add an AI agent:
@@ -111,6 +119,14 @@ Update a principal:
 ```bash
 insylus principal update --id 1 --name codex --kind ai-agent --notes "local coding agent"
 ```
+
+Delete a principal:
+
+```bash
+insylus principal delete --id 1
+```
+
+Deleting a principal also removes its access grants.
 
 Supported principal kinds:
 
@@ -151,6 +167,12 @@ insylus access update --id 1 --server atlas --principal codex --account aia --su
 ```
 
 Access updates require `--id`. Use `access list --json` to find it.
+
+Delete access:
+
+```bash
+insylus access delete --id 1
+```
 
 ## Typical Workflow
 

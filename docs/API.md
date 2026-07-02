@@ -185,6 +185,14 @@ curl -s -X PUT http://127.0.0.1:8097/api/servers \
   }'
 ```
 
+### Delete Server
+
+Deletes by `id`. Related access grants are removed automatically.
+
+```bash
+curl -s -X DELETE 'http://127.0.0.1:8097/api/servers?id=1'
+```
+
 ## Principals
 
 ### List Principals
@@ -218,6 +226,14 @@ curl -s -X PUT http://127.0.0.1:8097/api/principals \
     "kind": "ai-agent",
     "notes": "local coding agent"
   }'
+```
+
+### Delete Principal
+
+Deletes by `id`. Related access grants are removed automatically.
+
+```bash
+curl -s -X DELETE 'http://127.0.0.1:8097/api/principals?id=1'
 ```
 
 ## Access
@@ -255,6 +271,14 @@ curl -s -X PUT http://127.0.0.1:8097/api/access \
     "account": "aia",
     "sudo": "prompted"
   }'
+```
+
+### Delete Access Grant
+
+Deletes by `id`.
+
+```bash
+curl -s -X DELETE 'http://127.0.0.1:8097/api/access?id=1'
 ```
 
 ## Error Responses

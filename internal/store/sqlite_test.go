@@ -89,3 +89,76 @@ func TestUpdateAccessGrant(t *testing.T) {
 		t.Fatalf("grant was not updated: %+v", grants[0])
 	}
 }
+
+func TestDeleteAccessGrant(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "insylus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	ctx := context.Background()
+	server, err := st.CreateServer(ctx, model.Server{Name: "atlas"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal, err := st.CreatePrincipal(ctx, model.Principal{Name: "codex", Kind: model.PrincipalAIAgent})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grant, err := st.CreateAccessGrant(ctx, model.AccessGrant{
+		ServerID:    server.ID,
+		PrincipalID: principal.ID,
+		Account:     "aia",
+		Sudo:        model.SudoNone,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.DeleteAccessGrant(ctx, grant.ID); err != nil {
+		t.Fatal(err)
+	}
+	grants, err := st.ListAccessGrants(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(grants) != 0 {
+		t.Fatalf("expected deleted grant, got %+v", grants)
+	}
+}
+
+func TestDeleteServerCascadesAccessGrants(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "insylus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	ctx := context.Background()
+	server, err := st.CreateServer(ctx, model.Server{Name: "atlas"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal, err := st.CreatePrincipal(ctx, model.Principal{Name: "codex", Kind: model.PrincipalAIAgent})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreateAccessGrant(ctx, model.AccessGrant{
+		ServerID:    server.ID,
+		PrincipalID: principal.ID,
+		Account:     "aia",
+		Sudo:        model.SudoNone,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.DeleteServer(ctx, server.ID); err != nil {
+		t.Fatal(err)
+	}
+	grants, err := st.ListAccessGrants(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(grants) != 0 {
+		t.Fatalf("expected server delete to cascade grants, got %+v", grants)
+	}
+}

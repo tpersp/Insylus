@@ -21,16 +21,21 @@ type Server struct {
 }
 
 type dashboardRow struct {
-	ServerName     string
-	Hostname       string
-	Address        string
+	ServerName  string
+	Hostname    string
+	Address     string
+	ServerNotes string
+	Grants      []dashboardGrant
+	HasAccess   bool
+}
+
+type dashboardGrant struct {
 	PrincipalName  string
 	PrincipalKind  string
 	PrincipalNotes string
 	Account        string
 	Sudo           string
-	ServerNotes    string
-	HasAccess      bool
+	Notes          string
 }
 
 type pageData struct {
@@ -59,10 +64,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/manage", s.handleManage)
 	s.mux.HandleFunc("/servers", s.handleServerForm)
 	s.mux.HandleFunc("/servers/update", s.handleServerUpdateForm)
+	s.mux.HandleFunc("/servers/delete", s.handleServerDeleteForm)
 	s.mux.HandleFunc("/principals", s.handlePrincipalForm)
 	s.mux.HandleFunc("/principals/update", s.handlePrincipalUpdateForm)
+	s.mux.HandleFunc("/principals/delete", s.handlePrincipalDeleteForm)
 	s.mux.HandleFunc("/access", s.handleAccessForm)
 	s.mux.HandleFunc("/access/update", s.handleAccessUpdateForm)
+	s.mux.HandleFunc("/access/delete", s.handleAccessDeleteForm)
 	s.mux.HandleFunc("/api/servers", s.handleServers)
 	s.mux.HandleFunc("/api/principals", s.handlePrincipals)
 	s.mux.HandleFunc("/api/access", s.handleAccess)
@@ -110,6 +118,23 @@ func (s *Server) handleServerUpdateForm(w http.ResponseWriter, r *http.Request) 
 	redirectOrError(w, r, err)
 }
 
+func (s *Server) handleServerDeleteForm(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	id, err := parseID(r.FormValue("id"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	redirectOrError(w, r, s.store.DeleteServer(r.Context(), id))
+}
+
 func (s *Server) handlePrincipalForm(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -148,6 +173,23 @@ func (s *Server) handlePrincipalUpdateForm(w http.ResponseWriter, r *http.Reques
 		Notes: r.FormValue("notes"),
 	})
 	redirectOrError(w, r, err)
+}
+
+func (s *Server) handlePrincipalDeleteForm(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	id, err := parseID(r.FormValue("id"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	redirectOrError(w, r, s.store.DeletePrincipal(r.Context(), id))
 }
 
 func (s *Server) handleAccessForm(w http.ResponseWriter, r *http.Request) {
@@ -194,6 +236,23 @@ func (s *Server) handleAccessUpdateForm(w http.ResponseWriter, r *http.Request) 
 	redirectOrError(w, r, err)
 }
 
+func (s *Server) handleAccessDeleteForm(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	id, err := parseID(r.FormValue("id"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	redirectOrError(w, r, s.store.DeleteAccessGrant(r.Context(), id))
+}
+
 func parseID(raw string) (int64, error) {
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
@@ -231,6 +290,13 @@ func (s *Server) handleServers(w http.ResponseWriter, r *http.Request) {
 		}
 		item, err := s.store.UpdateServer(r.Context(), in)
 		writeResult(w, item, err)
+	case http.MethodDelete:
+		id, err := idFromRequest(r)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		writeDeleted(w, s.store.DeleteServer(r.Context(), id))
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
@@ -257,6 +323,13 @@ func (s *Server) handlePrincipals(w http.ResponseWriter, r *http.Request) {
 		}
 		item, err := s.store.UpdatePrincipal(r.Context(), in)
 		writeResult(w, item, err)
+	case http.MethodDelete:
+		id, err := idFromRequest(r)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		writeDeleted(w, s.store.DeletePrincipal(r.Context(), id))
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
@@ -283,9 +356,20 @@ func (s *Server) handleAccess(w http.ResponseWriter, r *http.Request) {
 		}
 		item, err := s.store.UpdateAccessGrant(r.Context(), in)
 		writeResult(w, item, err)
+	case http.MethodDelete:
+		id, err := idFromRequest(r)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		writeDeleted(w, s.store.DeleteAccessGrant(r.Context(), id))
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
+}
+
+func idFromRequest(r *http.Request) (int64, error) {
+	return parseID(r.URL.Query().Get("id"))
 }
 
 func writeResult(w http.ResponseWriter, v any, err error) {
@@ -294,6 +378,14 @@ func writeResult(w http.ResponseWriter, v any, err error) {
 		return
 	}
 	writeJSON(w, http.StatusOK, v)
+}
+
+func writeDeleted(w http.ResponseWriter, err error) {
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func writeCreated(w http.ResponseWriter, v any, err error) {
@@ -364,42 +456,35 @@ func (s *Server) loadPageData(r *http.Request) (pageData, error) {
 }
 
 func buildDashboardRows(servers []model.Server, principals []model.Principal, grants []model.AccessGrant) []dashboardRow {
-	serverByName := make(map[string]model.Server, len(servers))
+	rows := make([]dashboardRow, 0, len(servers))
+	rowByServer := make(map[string]int, len(servers))
 	for _, server := range servers {
-		serverByName[server.Name] = server
-	}
-	principalByName := make(map[string]model.Principal, len(principals))
-	for _, principal := range principals {
-		principalByName[principal.Name] = principal
-	}
-	rows := make([]dashboardRow, 0, len(grants)+len(servers))
-	serversWithAccess := map[string]bool{}
-	for _, grant := range grants {
-		server := serverByName[grant.ServerName]
-		principal := principalByName[grant.PrincipalName]
-		serversWithAccess[grant.ServerName] = true
-		rows = append(rows, dashboardRow{
-			ServerName:     grant.ServerName,
-			Hostname:       server.Hostname,
-			Address:        server.Address,
-			PrincipalName:  grant.PrincipalName,
-			PrincipalKind:  principal.Kind,
-			PrincipalNotes: principal.Notes,
-			Account:        grant.Account,
-			Sudo:           grant.Sudo,
-			ServerNotes:    server.Notes,
-			HasAccess:      true,
-		})
-	}
-	for _, server := range servers {
-		if serversWithAccess[server.Name] {
-			continue
-		}
+		rowByServer[server.Name] = len(rows)
 		rows = append(rows, dashboardRow{
 			ServerName:  server.Name,
 			Hostname:    server.Hostname,
 			Address:     server.Address,
 			ServerNotes: server.Notes,
+		})
+	}
+	principalByName := make(map[string]model.Principal, len(principals))
+	for _, principal := range principals {
+		principalByName[principal.Name] = principal
+	}
+	for _, grant := range grants {
+		principal := principalByName[grant.PrincipalName]
+		i, ok := rowByServer[grant.ServerName]
+		if !ok {
+			continue
+		}
+		rows[i].HasAccess = true
+		rows[i].Grants = append(rows[i].Grants, dashboardGrant{
+			PrincipalName:  grant.PrincipalName,
+			PrincipalKind:  principal.Kind,
+			PrincipalNotes: principal.Notes,
+			Account:        grant.Account,
+			Sudo:           grant.Sudo,
+			Notes:          grant.Notes,
 		})
 	}
 	return rows
@@ -435,6 +520,10 @@ section { min-width:0; }
 .badge.ai-agent { color:var(--accent); border-color:#155e59; }
 .badge.human { color:#93c5fd; border-color:#1d4ed8; }
 .badge.service { color:#c4b5fd; border-color:#6d28d9; }
+.grant-list { display:flex; flex-wrap:wrap; gap:8px; }
+.grant-chip { border:1px solid var(--line); border-radius:8px; background:var(--field); padding:8px; display:grid; gap:5px; min-width:180px; }
+.grant-chip strong { font-size:13px; }
+.grant-meta { display:flex; flex-wrap:wrap; gap:6px; align-items:center; color:var(--muted); font-size:12px; }
 .sudo { font-weight:700; }
 .sudo.passwordless { color:var(--danger); }
 .sudo.prompted { color:var(--warn); }
@@ -446,10 +535,14 @@ label { display:grid; gap:3px; color:var(--muted); font-size:12px; }
 input,select { width:100%; border:1px solid var(--line); border-radius:6px; padding:8px; font:inherit; background:var(--field); color:var(--ink); }
 input:focus,select:focus { outline:2px solid color-mix(in srgb, var(--accent) 45%, transparent); border-color:var(--accent); }
 button { border:0; border-radius:6px; padding:9px 10px; font:inherit; font-weight:700; color:#06201d; background:var(--accent); cursor:pointer; }
+.button-row { display:flex; gap:8px; align-items:center; }
+.button-row button { flex:1; }
+.delete-form { padding:0; border:0; background:transparent; display:block; }
+.delete-form button,.danger-button { background:transparent; color:var(--danger); border:1px solid #7f1d1d; }
 .edit-list { display:grid; gap:8px; }
 .edit-row { display:grid; gap:8px; grid-template-columns:repeat(4,minmax(0,1fr)) auto; align-items:end; background:var(--panel2); }
-.edit-row.server { grid-template-columns:repeat(4,minmax(0,1fr)) auto; }
-.edit-row.principal { grid-template-columns:1fr 150px 1fr auto; }
+.edit-row.server { grid-template-columns:repeat(4,minmax(0,1fr)) 148px; }
+.edit-row.principal { grid-template-columns:1fr 150px 1fr 148px; }
 .edit-row button { min-width:72px; }
 code { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:12px; }
 @media (max-width: 760px) {
@@ -502,16 +595,14 @@ var dashboardTemplate = template.Must(template.New("dashboard").Parse(pageStart(
 	<div class="dashboard">
 		<table>
 			<thead>
-				<tr><th>Server</th><th>Address</th><th>Principal</th><th>Account</th><th>Sudo</th><th>Server notes</th></tr>
+				<tr><th>Server</th><th>Address</th><th>Access</th><th>Server notes</th></tr>
 			</thead>
 			<tbody>
 				{{range .Rows}}
 				<tr>
 					<td><span class="primary">{{.ServerName}}</span>{{if .Hostname}}<span class="secondary">{{.Hostname}}</span>{{end}}</td>
 					<td>{{if .Address}}<code>{{.Address}}</code>{{else}}<span class="empty">none</span>{{end}}</td>
-					<td>{{if .HasAccess}}<span class="primary">{{.PrincipalName}}</span>{{if .PrincipalKind}} <span class="badge {{.PrincipalKind}}">{{.PrincipalKind}}</span>{{end}}{{if .PrincipalNotes}}<span class="secondary">{{.PrincipalNotes}}</span>{{end}}{{else}}<span class="empty">no access recorded</span>{{end}}</td>
-					<td>{{if .Account}}<code>{{.Account}}</code>{{else}}<span class="empty">none</span>{{end}}</td>
-					<td>{{if .Sudo}}<span class="sudo {{.Sudo}}">{{.Sudo}}</span>{{else}}<span class="empty">none</span>{{end}}</td>
+					<td>{{if .HasAccess}}<div class="grant-list">{{range .Grants}}<div class="grant-chip"><div><strong>{{.PrincipalName}}</strong> {{if .PrincipalKind}}<span class="badge {{.PrincipalKind}}">{{.PrincipalKind}}</span>{{end}}</div><div class="grant-meta"><code>{{.Account}}</code><span class="sudo {{.Sudo}}">{{.Sudo}}</span></div>{{if .PrincipalNotes}}<span class="secondary">{{.PrincipalNotes}}</span>{{end}}{{if .Notes}}<span class="secondary">{{.Notes}}</span>{{end}}</div>{{end}}</div>{{else}}<span class="empty">no access recorded</span>{{end}}</td>
 					<td>{{.ServerNotes}}</td>
 				</tr>
 				{{end}}
@@ -561,8 +652,9 @@ var manageTemplate = template.Must(template.New("manage").Parse(pageStart("Insyl
 			<label>Principal <select name="principal" required>{{range $.Principals}}<option value="{{.Name}}" {{if eq .Name $grant.PrincipalName}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
 			<label>Account <input name="account" value="{{.Account}}" required autocomplete="off"></label>
 			<label>Sudo <select class="sudo {{.Sudo}}" name="sudo"><option value="none" {{if eq .Sudo "none"}}selected{{end}}>None</option><option value="prompted" {{if eq .Sudo "prompted"}}selected{{end}}>Prompted</option><option value="passwordless" {{if eq .Sudo "passwordless"}}selected{{end}}>Passwordless</option></select></label>
-			<button type="submit">Save</button>
+			<div class="button-row"><button type="submit">Save</button><button class="danger-button" type="submit" form="delete-access-{{.ID}}">Delete</button></div>
 		</form>
+		<form id="delete-access-{{.ID}}" class="delete-form" method="post" action="/access/delete"><input type="hidden" name="id" value="{{.ID}}"></form>
 		{{end}}
 	</div>
 	{{else}}<p class="empty">No access grants yet.</p>{{end}}
@@ -580,8 +672,9 @@ var manageTemplate = template.Must(template.New("manage").Parse(pageStart("Insyl
 			<label>Hostname <input name="hostname" value="{{.Hostname}}" autocomplete="off"></label>
 			<label>Address <input name="address" value="{{.Address}}" autocomplete="off"></label>
 			<label>Notes <input name="notes" value="{{.Notes}}" autocomplete="off"></label>
-			<button type="submit">Save</button>
+			<div class="button-row"><button type="submit">Save</button><button class="danger-button" type="submit" form="delete-server-{{.ID}}">Delete</button></div>
 		</form>
+		<form id="delete-server-{{.ID}}" class="delete-form" method="post" action="/servers/delete"><input type="hidden" name="id" value="{{.ID}}"></form>
 		{{end}}
 	</div>
 	{{else}}<p class="empty">No servers yet.</p>{{end}}
@@ -597,8 +690,9 @@ var manageTemplate = template.Must(template.New("manage").Parse(pageStart("Insyl
 			<label>Name <input name="name" value="{{.Name}}" required autocomplete="off"></label>
 			<label>Kind <select name="kind"><option value="ai-agent" {{if eq .Kind "ai-agent"}}selected{{end}}>AI agent</option><option value="human" {{if eq .Kind "human"}}selected{{end}}>Human</option><option value="service" {{if eq .Kind "service"}}selected{{end}}>Service</option></select></label>
 			<label>Notes <input name="notes" value="{{.Notes}}" autocomplete="off"></label>
-			<button type="submit">Save</button>
+			<div class="button-row"><button type="submit">Save</button><button class="danger-button" type="submit" form="delete-principal-{{.ID}}">Delete</button></div>
 		</form>
+		<form id="delete-principal-{{.ID}}" class="delete-form" method="post" action="/principals/delete"><input type="hidden" name="id" value="{{.ID}}"></form>
 		{{end}}
 	</div>
 	{{else}}<p class="empty">No principals yet.</p>{{end}}

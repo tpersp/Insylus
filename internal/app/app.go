@@ -55,7 +55,7 @@ func serve(args []string) error {
 
 func server(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("server requires add, update, or list")
+		return fmt.Errorf("server requires add, update, delete, or list")
 	}
 	switch args[0] {
 	case "add":
@@ -132,6 +132,25 @@ func server(args []string) error {
 			}
 			return printUpdated("server", item.Name, *jsonOut, item)
 		})
+	case "delete":
+		fs := flag.NewFlagSet("server delete", flag.ContinueOnError)
+		target := targetFlags(fs)
+		id := fs.Int64("id", 0, "server id")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if target.useAPI() {
+			if err := deleteAPI(target.apiURL, "/api/servers", *id); err != nil {
+				return err
+			}
+			return printDeleted("server", *id)
+		}
+		return withStore(target.dbPath, func(st *store.Store) error {
+			if err := st.DeleteServer(context.Background(), *id); err != nil {
+				return err
+			}
+			return printDeleted("server", *id)
+		})
 	default:
 		return fmt.Errorf("unknown server command %q", args[0])
 	}
@@ -139,7 +158,7 @@ func server(args []string) error {
 
 func principal(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("principal requires add, update, or list")
+		return fmt.Errorf("principal requires add, update, delete, or list")
 	}
 	switch args[0] {
 	case "add":
@@ -214,6 +233,25 @@ func principal(args []string) error {
 			}
 			return printUpdated("principal", item.Name, *jsonOut, item)
 		})
+	case "delete":
+		fs := flag.NewFlagSet("principal delete", flag.ContinueOnError)
+		target := targetFlags(fs)
+		id := fs.Int64("id", 0, "principal id")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if target.useAPI() {
+			if err := deleteAPI(target.apiURL, "/api/principals", *id); err != nil {
+				return err
+			}
+			return printDeleted("principal", *id)
+		}
+		return withStore(target.dbPath, func(st *store.Store) error {
+			if err := st.DeletePrincipal(context.Background(), *id); err != nil {
+				return err
+			}
+			return printDeleted("principal", *id)
+		})
 	default:
 		return fmt.Errorf("unknown principal command %q", args[0])
 	}
@@ -221,7 +259,7 @@ func principal(args []string) error {
 
 func access(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("access requires grant, update, or list")
+		return fmt.Errorf("access requires grant, update, delete, or list")
 	}
 	switch args[0] {
 	case "grant":
@@ -313,6 +351,25 @@ func access(args []string) error {
 			}
 			return printUpdated("access grant", fmt.Sprintf("%d", item.ID), *jsonOut, item)
 		})
+	case "delete":
+		fs := flag.NewFlagSet("access delete", flag.ContinueOnError)
+		target := targetFlags(fs)
+		id := fs.Int64("id", 0, "access grant id")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if target.useAPI() {
+			if err := deleteAPI(target.apiURL, "/api/access", *id); err != nil {
+				return err
+			}
+			return printDeleted("access grant", *id)
+		}
+		return withStore(target.dbPath, func(st *store.Store) error {
+			if err := st.DeleteAccessGrant(context.Background(), *id); err != nil {
+				return err
+			}
+			return printDeleted("access grant", *id)
+		})
 	default:
 		return fmt.Errorf("unknown access command %q", args[0])
 	}
@@ -383,6 +440,11 @@ func printUpdated(kind, name string, jsonOut bool, v any) error {
 		return printJSON(v)
 	}
 	fmt.Printf("%s %s updated\n", kind, name)
+	return nil
+}
+
+func printDeleted(kind string, id int64) error {
+	fmt.Printf("%s %d deleted\n", kind, id)
 	return nil
 }
 
@@ -462,6 +524,19 @@ func putAPI(baseURL, path string, in any, out any) error {
 	return decodeAPI(resp, out)
 }
 
+func deleteAPI(baseURL, path string, id int64) error {
+	req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s%s?id=%d", strings.TrimRight(baseURL, "/"), path, id), nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return decodeAPI(resp, &struct{}{})
+}
+
 func decodeAPI(resp *http.Response, out any) error {
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -476,6 +551,9 @@ func decodeAPI(resp *http.Response, out any) error {
 		}
 		return fmt.Errorf("API returned %s", resp.Status)
 	}
+	if resp.StatusCode == http.StatusNoContent {
+		return nil
+	}
 	return json.Unmarshal(data, out)
 }
 
@@ -487,12 +565,15 @@ Usage:
   insylus serve [--db PATH] [--listen ADDR]
   insylus server add --name NAME [--host HOST] [--addr ADDR] [--notes TEXT] [--api URL|--db PATH]
   insylus server update --id ID --name NAME [--host HOST] [--addr ADDR] [--notes TEXT] [--api URL|--db PATH]
+  insylus server delete --id ID [--api URL|--db PATH]
   insylus server list [--json] [--api URL|--db PATH]
   insylus principal add --name NAME [--kind human|service|ai-agent] [--notes TEXT] [--api URL|--db PATH]
   insylus principal update --id ID --name NAME [--kind human|service|ai-agent] [--notes TEXT] [--api URL|--db PATH]
+  insylus principal delete --id ID [--api URL|--db PATH]
   insylus principal list [--json] [--api URL|--db PATH]
   insylus access grant --server SERVER --principal PRINCIPAL --account ACCOUNT [--sudo none|prompted|passwordless] [--notes TEXT] [--api URL|--db PATH]
   insylus access update --id ID --server SERVER --principal PRINCIPAL --account ACCOUNT [--sudo none|prompted|passwordless] [--notes TEXT] [--api URL|--db PATH]
+  insylus access delete --id ID [--api URL|--db PATH]
   insylus access list [--json] [--api URL|--db PATH]
 `))
 	return nil

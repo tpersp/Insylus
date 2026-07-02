@@ -127,6 +127,17 @@ func (s *Store) UpdateServer(ctx context.Context, in model.Server) (model.Server
 	return in, nil
 }
 
+func (s *Store) DeleteServer(ctx context.Context, id int64) error {
+	if id == 0 {
+		return errors.New("server id is required")
+	}
+	res, err := s.db.ExecContext(ctx, `DELETE FROM servers WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	return requireChanged(res, "server")
+}
+
 func (s *Store) CreatePrincipal(ctx context.Context, in model.Principal) (model.Principal, error) {
 	now := time.Now().UTC()
 	in.Name = strings.TrimSpace(in.Name)
@@ -196,6 +207,17 @@ func (s *Store) UpdatePrincipal(ctx context.Context, in model.Principal) (model.
 	}
 	in.UpdatedAt = now
 	return in, nil
+}
+
+func (s *Store) DeletePrincipal(ctx context.Context, id int64) error {
+	if id == 0 {
+		return errors.New("principal id is required")
+	}
+	res, err := s.db.ExecContext(ctx, `DELETE FROM principals WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	return requireChanged(res, "principal")
 }
 
 func (s *Store) CreateAccessGrant(ctx context.Context, in model.AccessGrant) (model.AccessGrant, error) {
@@ -284,6 +306,17 @@ func (s *Store) UpdateAccessGrant(ctx context.Context, in model.AccessGrant) (mo
 	}
 	in.UpdatedAt = now
 	return in, nil
+}
+
+func (s *Store) DeleteAccessGrant(ctx context.Context, id int64) error {
+	if id == 0 {
+		return errors.New("access grant id is required")
+	}
+	res, err := s.db.ExecContext(ctx, `DELETE FROM access_grants WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	return requireChanged(res, "access grant")
 }
 
 func (s *Store) ListAccessGrants(ctx context.Context) ([]model.AccessGrant, error) {

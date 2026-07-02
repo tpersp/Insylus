@@ -241,14 +241,17 @@ Endpoint summary:
 GET  /api/servers
 POST /api/servers
 PUT  /api/servers
+DELETE /api/servers?id=ID
 
 GET  /api/principals
 POST /api/principals
 PUT  /api/principals
+DELETE /api/principals?id=ID
 
 GET  /api/access
 POST /api/access
 PUT  /api/access
+DELETE /api/access?id=ID
 ```
 
 ## Response Shapes
